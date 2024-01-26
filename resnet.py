@@ -3,8 +3,7 @@ Implementation of ResNet18 Model using PyTorch
 """
 
 import torch
-import torch.nn as nn
-from torch import Tensor
+from torch import nn
 
 class BasicBlock(nn.Module): #pylint: disable=too-few-public-methods
     """
@@ -28,6 +27,10 @@ class BasicBlock(nn.Module): #pylint: disable=too-few-public-methods
             padding (int): Padding for the convolutional layers.
         """
         super().__init__()
+
+        # Check that downsampling is defined if dims don't match
+        if downsample is None and (stride != 1 or inplanes != planes * self.expansion):
+            raise ValueError("Expected inplanes == planes*expansion for downsample=None when stride != 1 or dimensions don't match.")
 
         self.conv1 = nn.Conv2d(inplanes,
                                planes,
