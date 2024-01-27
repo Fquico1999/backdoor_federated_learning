@@ -30,7 +30,7 @@ class BasicBlock(nn.Module): #pylint: disable=too-few-public-methods
 
         # Check that downsampling is defined if dims don't match
         if downsample is None and (stride != 1 or inplanes != planes * self.expansion):
-            raise ValueError("Expected inplanes == planes*expansion for downsample=None when stride != 1 or dimensions don't match.")
+            raise ValueError("Downsample cannot be None for inplanes!=planes*expansion")
 
         self.conv1 = nn.Conv2d(inplanes,
                                planes,

@@ -11,13 +11,13 @@ def test_basic_block_initialization():
     """
     Test initialization of BasicBlock components.
     """
-    block = BasicBlock(3, 64)
+    block = BasicBlock(64, 64)
     assert isinstance(block.conv1, nn.Conv2d)
     assert isinstance(block.bn1, nn.BatchNorm2d)
     assert isinstance(block.relu, nn.ReLU)
     assert isinstance(block.conv2, nn.Conv2d)
     assert isinstance(block.bn2, nn.BatchNorm2d)
-    assert block.conv1.weight.shape == (64,3,3,3)
+    assert block.conv1.weight.shape == (64,64,3,3)
 
 def test_basic_block_forward():
     """Test the forward pass of BasicBlock without needing to downsample"""
@@ -43,10 +43,11 @@ def test_basic_block_requires_downsampling():
     """
     inplanes, planes, stride = 64, 128, 2  # Example values that require downsampling
 
-    # Expect an AssertionError because downsample is None
+    # Expect a ValueError because downsample is None
     # and the conditions for downsampling are met
-    with pytest.raises(ValueError, match="Expected inplanes == planes*expansion for downsample=None"):
+    with pytest.raises(ValueError) as excinfo:
         BasicBlock(inplanes, planes, stride=stride)
+    assert str(excinfo.value) == "Downsample cannot be None for inplanes!=planes*expansion"
 
 def test_resnet_initialization():
     """
