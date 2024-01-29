@@ -12,8 +12,8 @@ import numpy as np
 import torch
 from torch import nn
 from torch import optim
-from .data_handler import DataHandler
-from .resnet import resnet18
+from data_handler import DataHandler
+from resnet import resnet18
 
 def load_config(config_path):
     """
@@ -67,20 +67,23 @@ def aggregate_models(global_model, local_models, eta, n, device):
 
     # Initialize an empty dict for aggregated updates, ensuring it's on the correct device
     aggregated_updates = {name: torch.zeros_like(param, device=device)\
-                           for name, param in global_state_dict.items()}
+                           for name, param in global_state_dict.items() if param.requires_grad}
 
     # Accumulate updates from each local model
     for model in local_models:
         local_state_dict = model.state_dict()
         for name, param in local_state_dict.items():
-            # Ensure each parameter update is on the correct device before accumulation
-            aggregated_updates[name] += (param.to(device) - global_state_dict[name])
+            if name in aggregated_updates:
+                # Ensure each parameter update is on the correct device before accumulation
+                aggregated_updates[name] += (param.to(device) - global_state_dict[name])
 
     # Apply the aggregated updates to the global model
     for name in global_state_dict.keys():
-        global_state_dict[name] += eta / n * aggregated_updates[name]
+        if name in aggregated_updates:
+            global_state_dict[name] += eta / n * aggregated_updates[name]
 
-    global_model.load_state_dict(global_state_dict)
+    # Ignore missing or non-matching keys
+    global_model.load_state_dict(global_state_dict, strict=False)
     return global_model
 
 def train_local_model(model, data_loader, epochs, lr, device, verbose=False): #pylint: disable=too-many-arguments
