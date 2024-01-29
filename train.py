@@ -9,6 +9,8 @@ import json
 import copy
 import numpy as np
 
+import matplotlib.pyplot as plt
+
 import torch
 from torch import nn
 from torch import optim
@@ -114,6 +116,15 @@ def train(config_path):
     # Create test DataLoder for global evaluation
     test_loader = data_handler.get_test_dataloader(batch_size=config['batch_size'])
 
+    # Create history to track global model performance.
+    history = {"global_model_acc":[]}
+    # Setup figure and axis formatting
+    fig, ax = plt.subplots()
+    fig.set_size_inches(12,6)
+    ax.set_xlabel("Rounds")
+    ax.set_ylabel("Accuracy")
+    ax.set_title("Global Model Test Accuracy")
+
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     global_model = resnet18().to(device)
@@ -145,15 +156,21 @@ def train(config_path):
                                         local_models,
                                         config['global_lr'],
                                         config['num_selected'])
-        # Save global model
-        if (round+1) % config['save_interval'] == 0 or round + 1 == config['num_rounds']:
-            save_path = f"./global_model_round_{round + 1}.pt"
-            torch.save(global_model.state_dict(), save_path)
-            print(f"Saved global model to {save_path}")
 
         # Evaluate the global model
         accuracy = evaluate_model(global_model, test_loader, device)
         print(f"Global Model Test Accuracy: {accuracy:.2%}")
+        history["global_model_acc"].append(accuracy)
+
+        # Save global model and history
+        if (round+1) % config['save_interval'] == 0 or round + 1 == config['num_rounds']:
+            save_path = f"./global_model_round_{round + 1}.pt"
+            torch.save(global_model.state_dict(), save_path)
+            print(f"Saved global model to {save_path}")
+            #Plot history and save
+            ax.plot(history['global_model_acc'], label="global_model_acc")
+            fig.tight_layout()
+            plt.savefig("global_model_acc.png", dpi=200)
 
 if __name__ == "__main__":
     train('config.json')
