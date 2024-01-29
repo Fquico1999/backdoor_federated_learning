@@ -25,7 +25,7 @@ def load_config(config_path):
         config = json.load(f)
     return config
 
-def evaluate_model(model, test_loader):
+def evaluate_model(model, test_loader, device):
     """
     Evaluates the given model's performance on the test dataset.
 
@@ -41,6 +41,7 @@ def evaluate_model(model, test_loader):
     total = 0
     with torch.no_grad():
         for inputs, labels in test_loader:
+            inputs, labels = inputs.to(device), labels.to(device)
             outputs = model(inputs)
             _, predicted = torch.max(outputs.data, 1)
             total += labels.size(0)
@@ -49,7 +50,7 @@ def evaluate_model(model, test_loader):
     accuracy = correct / total
     return accuracy
 
-def aggregate_models(global_model, local_models, eta, n):
+def aggregate_models(global_model, local_models, eta, n, device):
     """
     Aggregates updates from local models to update the global model.
 
@@ -63,15 +64,26 @@ def aggregate_models(global_model, local_models, eta, n):
         torch.nn.Module: The updated global model after aggregation.
     """
     global_state_dict = global_model.state_dict()
-    local_updates = [model.state_dict() for model in local_models]
+
+    # Initialize an empty dict for aggregated updates, ensuring it's on the correct device
+    aggregated_updates = {name: torch.zeros_like(param, device=device)\
+                           for name, param in global_state_dict.items()}
+
+    # Accumulate updates from each local model
+    for model in local_models:
+        local_state_dict = model.state_dict()
+        for name, param in local_state_dict.items():
+            # Ensure each parameter update is on the correct device before accumulation
+            aggregated_updates[name] += (param.to(device) - global_state_dict[name])
+
+    # Apply the aggregated updates to the global model
     for name in global_state_dict.keys():
-        global_param = global_state_dict[name]
-        local_sum = sum(local_update[name] - global_param for local_update in local_updates)
-        global_state_dict[name] = global_param + eta / n * local_sum
+        global_state_dict[name] += eta / n * aggregated_updates[name]
+
     global_model.load_state_dict(global_state_dict)
     return global_model
 
-def train_local_model(model, data_loader, epochs, lr, verbose=False):
+def train_local_model(model, data_loader, epochs, lr, device, verbose=False): #pylint: disable=too-many-arguments
     """
     Trains a local model on participant's data.
 
@@ -87,6 +99,7 @@ def train_local_model(model, data_loader, epochs, lr, verbose=False):
     for epoch in range(epochs):
         total_loss = 0
         for inputs, labels in data_loader:
+            inputs, labels = inputs.to(device), labels.to(device)
             optimizer.zero_grad()
             outputs = model(inputs)
             loss = criterion(outputs, labels)
@@ -110,7 +123,9 @@ def train(config_path):
     # Create test DataLoder for global evaluation
     test_loader = data_handler.get_test_dataloader(batch_size=config['batch_size'])
 
-    global_model = resnet18()
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+    global_model = resnet18().to(device)
 
     for federated_round in range(config['num_rounds']):
         selected_participants = np.random.choice(range(config['num_participants']),
@@ -130,6 +145,7 @@ def train(config_path):
                               data_loader,
                               config['local_epochs'],
                               config['local_lr'],
+                              device,
                               verbose=config['verbose'])
 
             local_models.append(local_model)
@@ -137,10 +153,11 @@ def train(config_path):
         global_model = aggregate_models(global_model,
                                         local_models,
                                         config['global_lr'],
-                                        config['num_selected'])
+                                        config['num_selected'],
+                                        device)
 
         # Evaluate the global model
-        accuracy = evaluate_model(global_model, test_loader)
+        accuracy = evaluate_model(global_model, test_loader, device)
         print(f"Global Model Test Accuracy: {accuracy:.2%}")
 
 if __name__ == "__main__":
