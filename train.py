@@ -9,6 +9,7 @@ import json
 import copy
 import numpy as np
 
+import torch
 from torch import nn
 from torch import optim
 from .data_handler import DataHandler
@@ -23,6 +24,30 @@ def load_config(config_path):
     with open(config_path, 'r', encoding='utf-8') as f:
         config = json.load(f)
     return config
+
+def evaluate_model(model, test_loader):
+    """
+    Evaluates the given model's performance on the test dataset.
+
+    Args:
+        model (torch.nn.Module): The model to evaluate.
+        test_loader (DataLoader): DataLoader for the test dataset.
+
+    Returns:
+        float: The accuracy of the model on the test dataset.
+    """
+    model.eval()
+    correct = 0
+    total = 0
+    with torch.no_grad():
+        for inputs, labels in test_loader:
+            outputs = model(inputs)
+            _, predicted = torch.max(outputs.data, 1)
+            total += labels.size(0)
+            correct += (predicted == labels).sum().item()
+
+    accuracy = correct / total
+    return accuracy
 
 def aggregate_models(global_model, local_models, eta, n):
     """
@@ -82,6 +107,9 @@ def train(config_path):
     config = load_config(config_path)
     data_handler = DataHandler(config_path)
 
+    # Create test DataLoder for global evaluation
+    test_loader = data_handler.get_test_dataloader(batch_size=config['batch_size'])
+
     global_model = resnet18()
 
     for federated_round in range(config['num_rounds']):
@@ -111,7 +139,9 @@ def train(config_path):
                                         config['global_lr'],
                                         config['num_selected'])
 
-        #TODO: Evaluate the global model here to track progress
+        # Evaluate the global model
+        accuracy = evaluate_model(global_model, test_loader)
+        print(f"Global Model Test Accuracy: {accuracy:.2%}")
 
 if __name__ == "__main__":
     train('config.json')
