@@ -50,7 +50,7 @@ def evaluate_model(model, test_loader, device):
     accuracy = correct / total
     return accuracy
 
-def aggregate_models(global_model, local_models, eta, n, device):
+def aggregate_models(global_model, local_models, eta, n):
     """
     Aggregates updates from local models to update the global model.
 
@@ -64,26 +64,14 @@ def aggregate_models(global_model, local_models, eta, n, device):
         torch.nn.Module: The updated global model after aggregation.
     """
     global_state_dict = global_model.state_dict()
-
-    # Initialize an empty dict for aggregated updates, ensuring it's on the correct device
-    aggregated_updates = {name: torch.zeros_like(param, device=device)\
-                           for name, param in global_state_dict.items() if param.requires_grad}
-
+    local_updates = [model.state_dict() for model in local_models]
     # Accumulate updates from each local model
-    for model in local_models:
-        local_state_dict = model.state_dict()
-        for name, param in local_state_dict.items():
-            if name in aggregated_updates:
-                # Ensure each parameter update is on the correct device before accumulation
-                aggregated_updates[name] += (param.to(device) - global_state_dict[name])
-
-    # Apply the aggregated updates to the global model
     for name in global_state_dict.keys():
-        if name in aggregated_updates:
-            global_state_dict[name] += eta / n * aggregated_updates[name]
-
-    # Ignore missing or non-matching keys
-    global_model.load_state_dict(global_state_dict, strict=False)
+        global_param = global_state_dict[name]
+        local_sum = sum([local_update[name] - global_param for local_update in local_updates])
+        global_state_dict[name] = global_param + eta / n * local_sum
+    # Apply the aggregated updates to the global model
+    global_model.load_state_dict(global_state_dict)
     return global_model
 
 def train_local_model(model, data_loader, epochs, lr, device, verbose=False): #pylint: disable=too-many-arguments
@@ -129,6 +117,7 @@ def train(config_path):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     global_model = resnet18().to(device)
+    global_model.train()
 
     for federated_round in range(config['num_rounds']):
         selected_participants = np.random.choice(range(config['num_participants']),
@@ -156,8 +145,7 @@ def train(config_path):
         global_model = aggregate_models(global_model,
                                         local_models,
                                         config['global_lr'],
-                                        config['num_selected'],
-                                        device)
+                                        config['num_selected'])
 
         # Evaluate the global model
         accuracy = evaluate_model(global_model, test_loader, device)
