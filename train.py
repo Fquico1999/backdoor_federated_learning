@@ -11,8 +11,8 @@ import numpy as np
 
 from torch import nn
 from torch import optim
-from data_handler import DataHandler
-from resnet import resnet18
+from .data_handler import DataHandler
+from .resnet import resnet18
 
 def load_config(config_path):
     """
