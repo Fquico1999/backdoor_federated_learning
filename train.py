@@ -3,6 +3,15 @@ Main Federated Learning Setup.
 There are a set number of rounds, where m participants are chosen
 at random to train for E epochs on their local datsets. After training, local models are
 sent to update the global model by averaging.
+TODO:
+- Generate Attacker Dataloader, replace c=20 out of 64 in batch with backdoor dataset
+- Generate backdoor dataset from list of backdoor train images, and target label
+- Generate backdoor test images by rotate / crop of list of backdoor test images
+- Add config for which epoch to select on participant as malicious
+- Single shot implementation first. For that update, E=6, lr=0.05 and 1/10s every 2 epochs.
+- Implement backdoor accuracy- TP rate (i.e rate at which inputs are misclassified as target) for 1k
+rotations and cropped of test backdoor images.
+- Track average global loss.
 """
 
 import json
