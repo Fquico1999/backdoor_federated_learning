@@ -69,8 +69,8 @@ def train_local_model(model, data_loader, epochs, lr, verbose=False):
             optimizer.step()
             total_loss += loss.item()
         if verbose:
-            print(f"Participant Training - Epoch: {epoch+1}/{epochs},\
-                   Loss: {total_loss/len(data_loader)}")
+            print(f"Participant Training - Epoch: {epoch+1}/{epochs},"
+                   f"Loss: {total_loss/len(data_loader)}")
 
 def train(config_path):
     """
@@ -95,6 +95,9 @@ def train(config_path):
             local_model = copy.deepcopy(global_model)
             data_loader = data_handler.get_dataloader(participant_id,
                                                       batch_size=config['batch_size'])
+            if config['verbose']:
+                print(f"Participant ID: {participant_id}")
+
             train_local_model(local_model,
                               data_loader,
                               config['local_epochs'],
