@@ -1,0 +1,11 @@
+{
+    "num_rounds": 10,
+    "num_participants": 100,
+    "num_selected": 10,
+    "local_epochs": 2,
+    "local_lr": 0.1,
+    "global_lr": 1,
+    "batch_size": 32,
+    "alpha": 0.9,
+    "partition_path": "./partitions.json"
+}
