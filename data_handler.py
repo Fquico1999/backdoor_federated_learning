@@ -23,8 +23,14 @@ class DataHandler:
         # Download CIFAR-10 dataset
         self.dataset = CIFAR10(root='./data', train=True, download=True, transform=ToTensor())
 
-        # Partition dataset
-        self.partitions = self.partition_dataset()
+        # Check if partitions already exist
+        partition_path = self.config.get('partition_path', './partitions.json')
+        if not os.path.exists(partition_path):
+            # Partition dataset
+            self.partition_dataset(partition_path)
+
+        # Load partitions from file since JSON converts keys to strs
+        self.partitions = self.load_partitions(partition_path)
 
     def load_config(self, config_path):
         """
@@ -34,16 +40,17 @@ class DataHandler:
             config = json.load(f)
         return config
 
-    def partition_dataset(self):
+    def load_partitions(self, partition_path):
+        """
+        Loads partitions from file.
+        """
+        with open(partition_path, 'r', encoding="utf-8") as f:
+            return json.load(f)
+
+    def partition_dataset(self, partition_path):
         """
         Partition CIFAR10 with Dirichlet, and saves partitioning to file.
         """
-        # Check if partitions already exist
-        partition_path = self.config.get('partition_path', './partitions.json')
-        if os.path.exists(partition_path):
-            with open(partition_path, 'r', encoding="utf-8") as f:
-                return json.load(f)
-
         # Initialize partitions
         partitions = {i: [] for i in range(self.num_participants)}
 
@@ -70,13 +77,11 @@ class DataHandler:
         with open(partition_path, 'w', encoding="utf-8") as f:
             json.dump(partitions, f)
 
-        return partitions
-
-    def get_dataloader(self, participant_id):
+    def get_dataloader(self, participant_id, batch_size=32):
         """
         Make partition for each participant available as a DataLoader
         """
         # Get dataset subset for the participant
-        subset = Subset(self.dataset, self.partitions[participant_id])
+        subset = Subset(self.dataset, self.partitions[str(participant_id)])
         # Create and return DataLoader
-        return DataLoader(subset, batch_size=self.config['batch_size'], shuffle=True)
+        return DataLoader(subset, batch_size=batch_size, shuffle=True)
