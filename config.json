@@ -6,6 +6,7 @@
     "local_lr": 0.1,
     "global_lr": 1,
     "batch_size": 32,
+    "save_interval": 10,
     "alpha": 0.9,
     "partition_path": "./partitions.json",
     "verbose": true

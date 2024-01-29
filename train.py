@@ -146,6 +146,11 @@ def train(config_path):
                                         local_models,
                                         config['global_lr'],
                                         config['num_selected'])
+        # Save global model
+        if (round+1) % config['save_interval'] == 0 or round + 1 == config['num_rounds']:
+            save_path = f"./global_model_round_{round + 1}.pt"
+            torch.save(global_model.state_dict(), save_path)
+            print(f"Saved global model to {save_path}")
 
         # Evaluate the global model
         accuracy = evaluate_model(global_model, test_loader, device)
