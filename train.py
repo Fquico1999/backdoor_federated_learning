@@ -117,7 +117,6 @@ def train(config_path):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     global_model = resnet18().to(device)
-    global_model.train()
 
     for federated_round in range(config['num_rounds']):
         selected_participants = np.random.choice(range(config['num_participants']),
