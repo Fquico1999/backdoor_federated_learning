@@ -94,7 +94,7 @@ def train_local_model(model, data_loader, epochs, lr, verbose=False):
             optimizer.step()
             total_loss += loss.item()
         if verbose:
-            print(f"Participant Training - Epoch: {epoch+1}/{epochs},"
+            print(f"Participant Training - Epoch: {epoch+1}/{epochs}, "
                    f"Loss: {total_loss/len(data_loader)}")
 
 def train(config_path):
