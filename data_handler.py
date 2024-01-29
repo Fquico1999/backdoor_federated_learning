@@ -22,6 +22,8 @@ class DataHandler:
 
         # Download CIFAR-10 dataset
         self.dataset = CIFAR10(root='./data', train=True, download=True, transform=ToTensor())
+        # Load test dataset
+        self.test_dataset = CIFAR10(root='./data', train=False, download=True, transform=ToTensor())
 
         # Check if partitions already exist
         partition_path = self.config.get('partition_path', './partitions.json')
@@ -85,3 +87,9 @@ class DataHandler:
         subset = Subset(self.dataset, self.partitions[str(participant_id)])
         # Create and return DataLoader
         return DataLoader(subset, batch_size=batch_size, shuffle=True)
+
+    def get_test_dataloader(self, batch_size=32):
+        """
+        Returns a DataLoader for the CIFAR-10 test dataset.
+        """
+        return DataLoader(self.test_dataset, batch_size=batch_size, shuffle=False)
