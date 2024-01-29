@@ -126,6 +126,7 @@ def train(config_path):
     ax.set_title("Global Model Test Accuracy")
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    print(f"Using {device}")
 
     global_model = resnet18().to(device)
 
@@ -163,8 +164,9 @@ def train(config_path):
         history["global_model_acc"].append(accuracy)
 
         # Save global model and history
-        if (round+1) % config['save_interval'] == 0 or round + 1 == config['num_rounds']:
-            save_path = f"./global_model_round_{round + 1}.pt"
+        if (federated_round+1) % config['save_interval'] == 0 or \
+            (federated_round + 1) == config['num_rounds']:
+            save_path = f"./global_model_round_{federated_round + 1}.pt"
             torch.save(global_model.state_dict(), save_path)
             print(f"Saved global model to {save_path}")
             #Plot history and save
