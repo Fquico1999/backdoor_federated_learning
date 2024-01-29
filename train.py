@@ -46,7 +46,7 @@ def aggregate_models(global_model, local_models, eta, n):
     global_model.load_state_dict(global_state_dict)
     return global_model
 
-def train_local_model(model, data_loader, epochs, lr):
+def train_local_model(model, data_loader, epochs, lr, verbose=False):
     """
     Trains a local model on participant's data.
 
@@ -59,13 +59,18 @@ def train_local_model(model, data_loader, epochs, lr):
     model.train()
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(model.parameters(), lr=lr)
-    for _ in range(epochs):
+    for epoch in range(epochs):
+        total_loss = 0
         for inputs, labels in data_loader:
             optimizer.zero_grad()
             outputs = model(inputs)
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
+            total_loss += loss.item()
+        if verbose:
+            print(f"Participant Training - Epoch: {epoch+1}/{epochs},\
+                   Loss: {total_loss/len(data_loader)}")
 
 def train(config_path):
     """
@@ -90,7 +95,12 @@ def train(config_path):
             local_model = copy.deepcopy(global_model)
             data_loader = data_handler.get_dataloader(participant_id,
                                                       batch_size=config['batch_size'])
-            train_local_model(local_model, data_loader, config['local_epochs'], config['local_lr'])
+            train_local_model(local_model,
+                              data_loader,
+                              config['local_epochs'],
+                              config['local_lr'],
+                              verbose=config['verbose'])
+
             local_models.append(local_model)
 
         global_model = aggregate_models(global_model,

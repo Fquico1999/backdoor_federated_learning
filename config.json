@@ -7,5 +7,6 @@
     "global_lr": 1,
     "batch_size": 32,
     "alpha": 0.9,
-    "partition_path": "./partitions.json"
+    "partition_path": "./partitions.json",
+    "verbose": true
 }
