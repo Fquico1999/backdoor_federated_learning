@@ -9,5 +9,6 @@
     "save_interval": 10,
     "alpha": 0.9,
     "partition_path": "./partitions.json",
+    "load_from_checkpoint": "",
     "verbose": true
 }

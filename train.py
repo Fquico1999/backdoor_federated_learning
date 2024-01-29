@@ -130,6 +130,12 @@ def train(config_path):
 
     global_model = resnet18().to(device)
 
+    # Check if we need to load from checkpoint
+    if config["load_from_checkpoint"]:
+        print(f"Resuming Training with {config['load_from_checkpoint']}")
+        global_model.load_state_dict(torch.load(config["load_from_checkpoint"],
+                                                map_location=device))
+
     for federated_round in range(config['num_rounds']):
         selected_participants = np.random.choice(range(config['num_participants']),
                                                  size=config['num_selected'], replace=False)
