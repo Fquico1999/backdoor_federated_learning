@@ -103,7 +103,7 @@ def train_local_model(model, data_loader, epochs, lr, device, verbose=False): #p
             print(f"Participant Training - Epoch: {epoch+1}/{epochs}, "
                    f"Loss: {total_loss/len(data_loader)}")
 
-def train(config_path):
+def train(config_path): #pylint: disable=too-many-locals
     """
     Main training function for federated learning setup.
 
@@ -176,7 +176,7 @@ def train(config_path):
             torch.save(global_model.state_dict(), save_path)
             print(f"Saved global model to {save_path}")
             #Plot history and save
-            ax.plot(history['global_model_acc'], label="global_model_acc")
+            ax.plot(history['global_model_acc'], "C0", label="global_model_acc")
             fig.tight_layout()
             plt.savefig("global_model_acc.png", dpi=200)
 
