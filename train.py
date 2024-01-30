@@ -17,6 +17,7 @@ rotations and cropped of test backdoor images.
 import json
 import copy
 import numpy as np
+import concurrent.futures
 
 import matplotlib.pyplot as plt
 
@@ -112,6 +113,27 @@ def train_local_model(model, data_loader, epochs, lr, device, verbose=False): #p
             print(f"Participant Training - Epoch: {epoch+1}/{epochs}, "
                    f"Loss: {total_loss/len(data_loader)}")
 
+def train_local_model(participant_id, global_state_dict, data_handler, epochs, lr, device):
+    local_model = resnet18().to(device)
+    local_model.load_state_dict(global_state_dict)
+    
+    local_model.train()
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.SGD(local_model.parameters(), lr=lr)
+    
+    data_loader = data_handler.get_dataloader(participant_id, batch_size=32)  # Assuming batch_size is fixed
+    
+    for epoch in range(epochs):
+        for inputs, labels in data_loader:
+            inputs, labels = inputs.to(device), labels.to(device)
+            optimizer.zero_grad()
+            outputs = local_model(inputs)
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer.step()
+    
+    return local_model.state_dict()
+
 def train(config_path): #pylint: disable=too-many-locals
     """
     Main training function for federated learning setup.
@@ -138,7 +160,10 @@ def train(config_path): #pylint: disable=too-many-locals
     print(f"Using {device}")
 
     global_model = resnet18().to(device)
+    global_state_dict = global_model.state_dict()
 
+    # Number of parallel local trainings
+    parallel_streams = config['parallel_streams']
     # Check if we need to load from checkpoint
     if config["load_from_checkpoint"]:
         print(f"Resuming Training with {config['load_from_checkpoint']}")
@@ -150,28 +175,37 @@ def train(config_path): #pylint: disable=too-many-locals
                                                  size=config['num_selected'], replace=False)
         print(f"Round {federated_round+1}/{config['num_rounds']}:\
                Selected Participants: {selected_participants}")
-        local_models = []
 
-        for participant_id in selected_participants:
-            local_model = copy.deepcopy(global_model)
-            data_loader = data_handler.get_dataloader(participant_id,
-                                                      batch_size=config['batch_size'])
-            if config['verbose']:
-                print(f"Participant ID: {participant_id}")
+        with concurrent.futures.ThreadPoolExecutor(max_workers=parallel_streams) as executor:
+            futures = [executor.submit(train_local_model, participant_id, global_state_dict, data_handler, config['local_epochs'], config['local_lr'], device) for participant_id in selected_participants]
 
-            train_local_model(local_model,
-                              data_loader,
-                              config['local_epochs'],
-                              config['local_lr'],
-                              device,
-                              verbose=config['verbose'])
+            local_state_dicts = [future.result() for future in concurrent.futures.as_completed(futures)]
 
-            local_models.append(local_model)
+        # Aggregate local models' updates into the global model
+        global_model = aggregate_models(global_model, local_state_dicts, config['global_lr'], config['num_selected'], device)
 
+        # for participant_id in selected_participants:
+        #     local_model = copy.deepcopy(global_model)
+        #     data_loader = data_handler.get_dataloader(participant_id,
+        #                                               batch_size=config['batch_size'])
+        #     if config['verbose']:
+        #         print(f"Participant ID: {participant_id}")
+
+        #     train_local_model(local_model,
+        #                       data_loader,
+        #                       config['local_epochs'],
+        #                       config['local_lr'],
+        #                       device,
+        #                       verbose=config['verbose'])
+
+        #     local_models.append(local_model)
+
+        # Aggregate local models' updates into the global model
         global_model = aggregate_models(global_model,
-                                        local_models,
+                                        local_state_dicts,
                                         config['global_lr'],
-                                        config['num_selected'])
+                                        config['num_selected'],
+                                        device)
 
         # Evaluate the global model
         accuracy = evaluate_model(global_model, test_loader, device)
