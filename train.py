@@ -15,9 +15,8 @@ rotations and cropped of test backdoor images.
 """
 
 import json
-import copy
-import numpy as np
 import concurrent.futures
+import numpy as np
 
 import matplotlib.pyplot as plt
 
@@ -62,68 +61,95 @@ def evaluate_model(model, test_loader, device):
     accuracy = correct / total
     return accuracy
 
-def aggregate_models(global_model, local_models, eta, n):
+def aggregate_models(global_model, local_state_dicts, eta, n, device):
     """
-    Aggregates updates from local models to update the global model.
+    Aggregates updates from local models' state dictionaries to update the global model.
 
     Args:
         global_model (torch.nn.Module): The global model to be updated.
-        local_models (list of torch.nn.Module): The local models with updates from participants.
+        local_state_dicts (list of dict): The state dictionaries from local models with updates.
         eta (float): The global learning rate used for aggregation.
         n (int): The number of participants selected in the current round.
+        device (torch.device): The device on which to perform the aggregation.
 
     Returns:
         torch.nn.Module: The updated global model after aggregation.
     """
     global_state_dict = global_model.state_dict()
-    local_updates = [model.state_dict() for model in local_models]
-    # Accumulate updates from each local model
+
+    # Accumulate updates from each local model's state dictionary
     for name in global_state_dict.keys():
         global_param = global_state_dict[name]
-        local_sum = sum([local_update[name] - global_param for local_update in local_updates])
+        # Ensure each parameter update is moved to the correct device before accumulation
+        local_sum = sum([(local_state_dict[name].to(device) if torch.is_tensor(local_state_dict[name]) else torch.tensor(local_state_dict[name], device=device)) - global_param for local_state_dict in local_state_dicts])
         global_state_dict[name] = global_param + eta / n * local_sum
+
     # Apply the aggregated updates to the global model
     global_model.load_state_dict(global_state_dict)
     return global_model
 
-def train_local_model(model, data_loader, epochs, lr, device, verbose=False): #pylint: disable=too-many-arguments
+
+# def train_local_model(model, data_loader, epochs, lr, device, verbose=False): #pylint: disable=too-many-arguments
+#     """
+#     Trains a local model on participant's data.
+
+#     Args:
+#         model (torch.nn.Module): The local model to be trained.
+#         data_loader (torch.utils.data.DataLoader): The DataLoader for the participant's data.
+#         epochs (int): The number of epochs to train the model.
+#         lr (float): The learning rate for local training.
+#     """
+#     model.train()
+#     criterion = nn.CrossEntropyLoss()
+#     optimizer = optim.SGD(model.parameters(), lr=lr)
+#     for epoch in range(epochs):
+#         total_loss = 0
+#         for inputs, labels in data_loader:
+#             inputs, labels = inputs.to(device), labels.to(device)
+#             optimizer.zero_grad()
+#             outputs = model(inputs)
+#             loss = criterion(outputs, labels)
+#             loss.backward()
+#             optimizer.step()
+#             total_loss += loss.item()
+#         if verbose:
+#             print(f"Participant Training - Epoch: {epoch+1}/{epochs}, "
+#                    f"Loss: {total_loss/len(data_loader)}")
+
+def train_local_model(participant_id, global_state_dict, data_handler, device, config):
     """
-    Trains a local model on participant's data.
+    Trains a local model for a specific participant in the federated learning setup.
 
     Args:
-        model (torch.nn.Module): The local model to be trained.
-        data_loader (torch.utils.data.DataLoader): The DataLoader for the participant's data.
-        epochs (int): The number of epochs to train the model.
-        lr (float): The learning rate for local training.
-    """
-    model.train()
-    criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(model.parameters(), lr=lr)
-    for epoch in range(epochs):
-        total_loss = 0
-        for inputs, labels in data_loader:
-            inputs, labels = inputs.to(device), labels.to(device)
-            optimizer.zero_grad()
-            outputs = model(inputs)
-            loss = criterion(outputs, labels)
-            loss.backward()
-            optimizer.step()
-            total_loss += loss.item()
-        if verbose:
-            print(f"Participant Training - Epoch: {epoch+1}/{epochs}, "
-                   f"Loss: {total_loss/len(data_loader)}")
+        participant_id (int): The unique identifier for the participant.
+        global_state_dict (dict): The state dictionary of the global model to ensure all
+            local models start from the same state.
+        data_handler (DataHandler): An instance of the DataHandler class that provides
+            access to the dataset and dataloaders.
+        device (torch.device): The device (CPU/GPU) on which the model will be trained.
+        config (dict): A configuration dictionary containing training parameters such as
+            'local_lr' for local learning rate, 'batch_size', 'local_epochs', and 'verbose'
+            for logging verbosity.
 
-def train_local_model(participant_id, global_state_dict, data_handler, epochs, lr, device):
+    Returns:
+        dict: The state dictionary of the locally trained model, ready to be aggregated
+        into the global model.
+
+    """
+    if config['verbose']:
+        print(f"Participant ID: {participant_id}")
+
     local_model = resnet18().to(device)
     local_model.load_state_dict(global_state_dict)
-    
+
     local_model.train()
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(local_model.parameters(), lr=lr)
-    
-    data_loader = data_handler.get_dataloader(participant_id, batch_size=32)  # Assuming batch_size is fixed
-    
-    for epoch in range(epochs):
+    optimizer = optim.SGD(local_model.parameters(), lr=config['local_lr'])
+
+    data_loader = data_handler.get_dataloader(participant_id, batch_size=config['batch_size'])
+
+    for epoch in range(config['local_epochs']):
+        total_loss = 0
         for inputs, labels in data_loader:
             inputs, labels = inputs.to(device), labels.to(device)
             optimizer.zero_grad()
@@ -131,7 +157,11 @@ def train_local_model(participant_id, global_state_dict, data_handler, epochs, l
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
-    
+            total_loss += loss.item()
+        if config['verbose']:
+            print(f"Participant Training - Epoch: {epoch+1}/{config['local_epochs']}, "
+                f"Loss: {total_loss/len(data_loader)}")
+
     return local_model.state_dict()
 
 def train(config_path): #pylint: disable=too-many-locals
@@ -177,28 +207,15 @@ def train(config_path): #pylint: disable=too-many-locals
                Selected Participants: {selected_participants}")
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=parallel_streams) as executor:
-            futures = [executor.submit(train_local_model, participant_id, global_state_dict, data_handler, config['local_epochs'], config['local_lr'], device) for participant_id in selected_participants]
+            futures = [executor.submit(train_local_model,
+                                       participant_id,
+                                       global_state_dict,
+                                       data_handler,
+                                       device,
+                                       config) for participant_id in selected_participants]
 
-            local_state_dicts = [future.result() for future in concurrent.futures.as_completed(futures)]
-
-        # Aggregate local models' updates into the global model
-        global_model = aggregate_models(global_model, local_state_dicts, config['global_lr'], config['num_selected'], device)
-
-        # for participant_id in selected_participants:
-        #     local_model = copy.deepcopy(global_model)
-        #     data_loader = data_handler.get_dataloader(participant_id,
-        #                                               batch_size=config['batch_size'])
-        #     if config['verbose']:
-        #         print(f"Participant ID: {participant_id}")
-
-        #     train_local_model(local_model,
-        #                       data_loader,
-        #                       config['local_epochs'],
-        #                       config['local_lr'],
-        #                       device,
-        #                       verbose=config['verbose'])
-
-        #     local_models.append(local_model)
+            local_state_dicts = [future.result() for future in\
+                                  concurrent.futures.as_completed(futures)]
 
         # Aggregate local models' updates into the global model
         global_model = aggregate_models(global_model,
