@@ -81,40 +81,17 @@ def aggregate_models(global_model, local_state_dicts, eta, n, device):
     for name in global_state_dict.keys():
         global_param = global_state_dict[name]
         # Ensure each parameter update is moved to the correct device before accumulation
-        local_sum = sum([(local_state_dict[name].to(device) if torch.is_tensor(local_state_dict[name]) else torch.tensor(local_state_dict[name], device=device)) - global_param for local_state_dict in local_state_dicts])
+        local_sum = sum((local_state_dict[name].to(device)\
+                         if torch.is_tensor(local_state_dict[name])\
+                         else torch.tensor(local_state_dict[name], device=device)) - global_param\
+                            for local_state_dict in local_state_dicts)
+
         global_state_dict[name] = global_param + eta / n * local_sum
 
     # Apply the aggregated updates to the global model
     global_model.load_state_dict(global_state_dict)
     return global_model
 
-
-# def train_local_model(model, data_loader, epochs, lr, device, verbose=False): #pylint: disable=too-many-arguments
-#     """
-#     Trains a local model on participant's data.
-
-#     Args:
-#         model (torch.nn.Module): The local model to be trained.
-#         data_loader (torch.utils.data.DataLoader): The DataLoader for the participant's data.
-#         epochs (int): The number of epochs to train the model.
-#         lr (float): The learning rate for local training.
-#     """
-#     model.train()
-#     criterion = nn.CrossEntropyLoss()
-#     optimizer = optim.SGD(model.parameters(), lr=lr)
-#     for epoch in range(epochs):
-#         total_loss = 0
-#         for inputs, labels in data_loader:
-#             inputs, labels = inputs.to(device), labels.to(device)
-#             optimizer.zero_grad()
-#             outputs = model(inputs)
-#             loss = criterion(outputs, labels)
-#             loss.backward()
-#             optimizer.step()
-#             total_loss += loss.item()
-#         if verbose:
-#             print(f"Participant Training - Epoch: {epoch+1}/{epochs}, "
-#                    f"Loss: {total_loss/len(data_loader)}")
 
 def train_local_model(participant_id, global_state_dict, data_handler, device, config):
     """
@@ -164,6 +141,82 @@ def train_local_model(participant_id, global_state_dict, data_handler, device, c
 
     return local_model.state_dict()
 
+def pretrain_global_model(model, data_handler, device, config):
+    """
+    Pretrains the global model on the entire CIFAR10 training dataset.
+
+    Args:
+        model (torch.nn.Module): The global model to be pretrained.
+        data_handler (DataHandler): The DataHandler object providing access to the CIFAR10 dataset.
+        device (torch.device): The device (CPU or GPU) to train the model on.
+        config (dict): A configuration dictionary containing training parameters such as
+            'pretrain_lr' for the pretraining learning rate, 'batch_size', and 'pretrain_epochs'.
+
+    Returns:
+        The pretrained model.
+    """
+    # Set the model to training mode
+    model.train()
+
+    # Create history to track global model performance.
+    history = {"global_model_loss":[], "global_model_acc":[]}
+    # Setup figure and axis formatting
+    fig, ax = plt.subplots()
+    fig.set_size_inches(12,6)
+    ax.set_xlabel("Epochs")
+    ax.set_title("Global Model Pretrain History")
+
+    # Define the loss criterion and optimizer
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.SGD(model.parameters(), lr=config['pretrain_lr'])
+
+    # Get the DataLoader for the full training dataset
+    train_loader = data_handler.get_global_train_dataloader(batch_size=config['batch_size'],
+                                                            shuffle=True)
+    test_loader = data_handler.get_test_dataloader(batch_size=config['batch_size'])
+
+    # Training loop
+    for epoch in range(config['pretrain_epochs']):
+        total_loss = 0
+        for inputs, labels in train_loader:
+            inputs, labels = inputs.to(device), labels.to(device)
+
+            # Zero the parameter gradients
+            optimizer.zero_grad()
+
+            # Forward pass, backward pass, and optimize
+            outputs = model(inputs)
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer.step()
+
+            total_loss += loss.item()
+
+        # Evaluate the global model
+        accuracy = evaluate_model(model, test_loader, device)
+
+        history["global_model_acc"].append(accuracy)
+        history["global_model_loss"].append(total_loss/len(train_loader))
+        # Print statistics
+        print(f"Pretrain Epoch: {epoch+1}/{config['pretrain_epochs']}, \
+              Loss: {total_loss/len(train_loader)}, \
+              Test Acc: {accuracy}")
+
+        # Save global model and history
+        if (epoch+1) % config['save_interval'] == 0 or \
+            (epoch + 1) == config['pretrain_epochs']:
+            save_path = f"./global_model_pretrain_{epoch + 1}.pt"
+            torch.save(model.state_dict(), save_path)
+            print(f"Saved global model to {save_path}")
+
+            #Plot history and save
+            ax.plot(history['global_model_loss'], "C0", label="train_loss")
+            ax.plot(history['global_model_acc'], "C1", label="test_acc")
+            fig.tight_layout()
+            plt.savefig("global_model_pretrain_history.png", dpi=200)
+
+    return model
+
 def train(config_path): #pylint: disable=too-many-locals
     """
     Main training function for federated learning setup.
@@ -190,6 +243,11 @@ def train(config_path): #pylint: disable=too-many-locals
     print(f"Using {device}")
 
     global_model = resnet18().to(device)
+
+    # Pretrain Global Model
+    if config["pretrain"]:
+        global_model = pretrain_global_model(global_model, data_handler, device, config)
+
     global_state_dict = global_model.state_dict()
 
     # Number of parallel local trainings

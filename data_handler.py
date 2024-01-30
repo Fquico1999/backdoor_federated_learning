@@ -93,3 +93,16 @@ class DataHandler:
         Returns a DataLoader for the CIFAR-10 test dataset.
         """
         return DataLoader(self.test_dataset, batch_size=batch_size, shuffle=False)
+
+    def get_global_train_dataloader(self, batch_size=32, shuffle=True):
+        """
+        Returns a DataLoader for the entire CIFAR-10 training dataset.
+
+        Args:
+            batch_size (int): The batch size for the DataLoader.
+            shuffle (bool): Whether to shuffle the dataset.
+
+        Returns:
+            DataLoader: A DataLoader for the CIFAR-10 training dataset.
+        """
+        return DataLoader(self.dataset, batch_size=batch_size, shuffle=shuffle)
