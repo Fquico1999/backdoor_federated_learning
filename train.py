@@ -166,6 +166,32 @@ def plot_history(history, title, savepath=None):
     if savepath:
         plt.savefig(savepath, dpi=200)
 
+def plot_federated_history(history, title, savepath=None):
+    """
+    Helper method to plot training history for federated learning.
+    TODO
+    - Add support for plotting when attack happens, and backdoor task accuracy
+    """
+    fig = plt.gcf()
+    ax = plt.gca()
+    plt.cla()
+    ax_loss = plt.twinx(ax)
+    for i, metric in enumerate(history):
+        if '_acc' in metric:
+            ax.plot(history[metric], f"C{i}", label=metric)
+        else:
+            ax_loss.plot(history[metric],f"C{i}",label=metric)
+    ax.set_xlabel("Rounds")
+    ax.set_ylabel("Accuracy")
+    ax_loss.set_ylabel("")
+    ax.set_ylim([0,1])
+    ax.set_title(title)
+    ax.legend(loc = 'upper left')
+    ax_loss.legend(loc='upper right')
+    fig.tight_layout()
+    if savepath:
+        plt.savefig(savepath, dpi=200)
+
 def pretrain_global_model(model, data_handler, device, config):
     """
     Pretrains the global model on the entire CIFAR10 training dataset.
@@ -338,10 +364,15 @@ def train(config_path): #pylint: disable=too-many-locals
             save_path = f"./global_model_round_{federated_round + 1}.pt"
             torch.save(global_model.state_dict(), save_path)
             print(f"Saved global model to {save_path}")
+
             #Plot history and save
             ax.plot(history['global_model_acc'], "C0", label="global_model_acc")
             fig.tight_layout()
             plt.savefig("global_model_acc.png", dpi=200)
+            #Plot history and save
+            plot_federated_history(history,
+                         "Global Model Test Accuracy",
+                         "global_model_acc.png")
 
 if __name__ == "__main__":
     train('config.json')
