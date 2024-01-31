@@ -88,11 +88,11 @@ class DataHandler:
         # Create and return DataLoader
         return DataLoader(subset, batch_size=batch_size, shuffle=True)
 
-    def get_test_dataloader(self, batch_size=32):
+    def get_test_dataloader(self, batch_size=32, shuffle=True):
         """
         Returns a DataLoader for the CIFAR-10 test dataset.
         """
-        return DataLoader(self.test_dataset, batch_size=batch_size, shuffle=False)
+        return DataLoader(self.test_dataset, batch_size=batch_size, shuffle=shuffle)
 
     def get_global_train_dataloader(self, batch_size=32, shuffle=True):
         """
