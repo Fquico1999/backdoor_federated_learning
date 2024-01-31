@@ -1,8 +1,8 @@
 """
 Data Handler for loading and partitioning the CIFAR10 dataset among the participants.
 """
-
 import json
+import configparser
 import os
 import numpy as np
 from torchvision.datasets import CIFAR10
@@ -18,11 +18,11 @@ class DataHandler:
     def __init__(self, config_path):
         # Load configurations
         self.config = self.load_config(config_path)
-        self.num_participants = self.config['num_participants']
-        self.alpha = self.config['alpha']
+        self.num_participants = self.config['Federated'].getint(['num_participants'])
+        self.alpha = self.config['Federated'].getfloat(['alpha'])
 
         # Download CIFAR-10 dataset
-        if self.config['data_augmentation']:
+        if self.config['Federated'].getboolean(['data_augmentation']):
             train_transform = transforms.Compose([RandomRotation(10),
                                                   RandomHorizontalFlip(),
                                                   RandomCrop(size=24),
@@ -34,7 +34,7 @@ class DataHandler:
         self.test_dataset = CIFAR10(root='./data', train=False, download=True, transform=ToTensor())
 
         # Check if partitions already exist
-        partition_path = self.config.get('partition_path', './partitions.json')
+        partition_path = self.config['Federated'].get('partition_path', './partitions.json')
         if not os.path.exists(partition_path):
             # Partition dataset
             self.partition_dataset(partition_path)
@@ -46,8 +46,8 @@ class DataHandler:
         """
         Reads general config file.
         """
-        with open(config_path, 'r', encoding="utf-8") as f:
-            config = json.load(f)
+        config = configparser.ConfigParser()
+        config.read(config_path)
         return config
 
     def load_partitions(self, partition_path):
