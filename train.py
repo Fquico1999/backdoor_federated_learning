@@ -13,9 +13,10 @@ TODO:
 rotations and cropped of test backdoor images.
 - Track average global loss.
 """
-
+import os
 import json
 import concurrent.futures
+import urllib.request
 import numpy as np
 
 import matplotlib.pyplot as plt
@@ -155,6 +156,17 @@ def pretrain_global_model(model, data_handler, device, config):
     Returns:
         The pretrained model.
     """
+    print(f"Pre-training Global Model for {config['pretrain_epochs']} epochs")
+
+    # Download and load the state_dict for pretrained Imagenet weights
+    if config["pretrain_load_imagenet"]:
+        # Local weights file
+        weights_file = "./resnet18-imagenetv1.pth"
+        if not os.path.exists(weights_file):
+            weights_url = 'https://download.pytorch.org/models/resnet18-f37072fd.pth'
+            urllib.request.urlretrieve(weights_url, weights_file)
+        model.load_state_dict(torch.load(weights_file, map_location=device))
+
     # Set the model to training mode
     model.train()
 
@@ -171,13 +183,20 @@ def pretrain_global_model(model, data_handler, device, config):
     optimizer = optim.SGD(model.parameters(), lr=config['pretrain_lr'])
 
     # Get the DataLoader for the full training dataset
-    train_loader = data_handler.get_global_train_dataloader(batch_size=config['batch_size'],
+    train_loader = data_handler.get_global_train_dataloader(batch_size=config['pretrain_batch_size'],
                                                             shuffle=True)
-    test_loader = data_handler.get_test_dataloader(batch_size=config['batch_size'])
+    test_loader = data_handler.get_test_dataloader(batch_size=config['pretrain_batch_size'],
+                                                   shuffle=True)
 
     # Training loop
     for epoch in range(config['pretrain_epochs']):
         total_loss = 0
+        # Track best model
+        best_accuracy = 0
+        best_model = None
+        # Avoid saving the model if best model hasn't changed
+        best_model_saved = False
+
         for inputs, labels in train_loader:
             inputs, labels = inputs.to(device), labels.to(device)
 
@@ -195,23 +214,34 @@ def pretrain_global_model(model, data_handler, device, config):
         # Evaluate the global model
         accuracy = evaluate_model(model, test_loader, device)
 
+        # Update best model
+        if accuracy > best_accuracy:
+            best_accuracy = accuracy
+            best_model = model.state_dict()
+            best_model_saved = False
+
         history["global_model_acc"].append(accuracy)
         history["global_model_loss"].append(total_loss/len(train_loader))
+
         # Print statistics
         print(f"Pretrain Epoch: {epoch+1}/{config['pretrain_epochs']}, \
               Loss: {total_loss/len(train_loader)}, \
               Test Acc: {accuracy}")
 
         # Save global model and history
-        if (epoch+1) % config['save_interval'] == 0 or \
+        if (epoch+1) % config['pretrain_save_interval'] == 0 or \
             (epoch + 1) == config['pretrain_epochs']:
-            save_path = f"./global_model_pretrain_{epoch + 1}.pt"
-            torch.save(model.state_dict(), save_path)
-            print(f"Saved global model to {save_path}")
+            if not best_model_saved:
+                save_path = "./global_model_pretrain_best.pt"
+                torch.save(best_model, save_path)
+                best_model_saved = True
+                print(f"Saved global model to {save_path}")
 
             #Plot history and save
+            plt.cla()
             ax.plot(history['global_model_loss'], "C0", label="train_loss")
             ax.plot(history['global_model_acc'], "C1", label="test_acc")
+            plt.legend()
             fig.tight_layout()
             plt.savefig("global_model_pretrain_history.png", dpi=200)
 
