@@ -202,7 +202,7 @@ def pretrain_global_model(model, data_handler, device, config):
     # Define the loss criterion and optimizer
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=config['pretrain_lr'])
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max')
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', verbose=True)
 
     # Get the DataLoader for the full training dataset
     train_loader = data_handler.get_global_train_dataloader(batch_size=config['pretrain_batch_size'],
