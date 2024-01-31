@@ -157,6 +157,7 @@ def plot_history(history, title, savepath=None):
             ax_loss.plot(history[metric],f"C{i}",label=metric)
     ax.set_xlabel("Epochs")
     ax.set_ylabel("Accuracy")
+    ax_loss.set_ylabel("")
     ax.set_ylim([0,1])
     ax.set_title(title)
     ax.legend(loc = 'upper left')
@@ -180,15 +181,6 @@ def pretrain_global_model(model, data_handler, device, config):
         The pretrained model.
     """
     print(f"Pre-training Global Model for {config['pretrain_epochs']} epochs")
-
-    # Download and load the state_dict for pretrained Imagenet weights
-    if config["pretrain_load_imagenet"]:
-        # Local weights file
-        weights_file = "./resnet18-imagenetv1.pth"
-        if not os.path.exists(weights_file):
-            weights_url = 'https://download.pytorch.org/models/resnet18-f37072fd.pth'
-            urllib.request.urlretrieve(weights_url, weights_file)
-        model.load_state_dict(torch.load(weights_file, map_location=device))
 
     # Set the model to training mode
     model.train()
@@ -264,7 +256,9 @@ def pretrain_global_model(model, data_handler, device, config):
                 print(f"Saved global model to {save_path}")
 
             #Plot history and save
-            plot_history(history, "Global Model Pretrain History", "global_model_pretrain_history.png")
+            plot_history(history,
+                         "Global Model Pretrain History",
+                         "global_model_pretrain_history.png")
 
     return model
 
