@@ -10,6 +10,7 @@
     "alpha": 0.9,
     "partition_path": "./partitions.json",
     "load_from_checkpoint": "",
+    "data_augmentation": true,
     "verbose": false,
     "pretrain": true,
     "pretrain_load_imagenet":true,

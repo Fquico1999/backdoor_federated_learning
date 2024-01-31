@@ -6,7 +6,8 @@ import json
 import os
 import numpy as np
 from torchvision.datasets import CIFAR10
-from torchvision.transforms import ToTensor
+from torchvision import transforms
+from torchvision.transforms import ToTensor, RandomCrop, RandomRotation, RandomHorizontalFlip
 from torch.utils.data import DataLoader, Subset
 
 class DataHandler:
@@ -21,7 +22,14 @@ class DataHandler:
         self.alpha = self.config['alpha']
 
         # Download CIFAR-10 dataset
-        self.dataset = CIFAR10(root='./data', train=True, download=True, transform=ToTensor())
+        if self.config['data_augmentation']:
+            train_transform = transforms.Compose([RandomRotation(10),
+                                                  RandomHorizontalFlip(),
+                                                  RandomCrop(size=24),
+                                                  ToTensor()])
+        else:
+            train_transform = ToTensor()
+        self.dataset = CIFAR10(root='./data', train=True, download=True, transform=train_transform)
         # Load test dataset
         self.test_dataset = CIFAR10(root='./data', train=False, download=True, transform=ToTensor())
 
