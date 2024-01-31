@@ -14,6 +14,7 @@ rotations and cropped of test backdoor images.
 - Track average global loss.
 """
 import os
+import configparser
 import json
 import concurrent.futures
 import urllib.request
@@ -33,8 +34,8 @@ def load_config(config_path):
     Args:
         config_path (str): The path to the configuration file.
     """
-    with open(config_path, 'r', encoding='utf-8') as f:
-        config = json.load(f)
+    config = configparser.ConfigParser()
+    config.read(config_path)
     return config
 
 def evaluate_model(model, test_loader, device):
@@ -114,7 +115,7 @@ def train_local_model(participant_id, global_state_dict, data_handler, device, c
         into the global model.
 
     """
-    if config['verbose']:
+    if config['DEFAULT'].getboolean(['verbose']):
         print(f"Participant ID: {participant_id}")
 
     local_model = resnet18().to(device)
@@ -122,11 +123,11 @@ def train_local_model(participant_id, global_state_dict, data_handler, device, c
 
     local_model.train()
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(local_model.parameters(), lr=config['local_lr'])
+    optimizer = optim.SGD(local_model.parameters(), lr=config['Federated'].getfloat(['local_lr']))
 
-    data_loader = data_handler.get_dataloader(participant_id, batch_size=config['batch_size'])
+    data_loader = data_handler.get_dataloader(participant_id, batch_size=config['Federated'].getint(['batch_size']))
 
-    for epoch in range(config['local_epochs']):
+    for epoch in range(config['Federated'].getint(['local_epochs'])):
         total_loss = 0
         for inputs, labels in data_loader:
             inputs, labels = inputs.to(device), labels.to(device)
@@ -136,8 +137,8 @@ def train_local_model(participant_id, global_state_dict, data_handler, device, c
             loss.backward()
             optimizer.step()
             total_loss += loss.item()
-        if config['verbose']:
-            print(f"Participant Training - Epoch: {epoch+1}/{config['local_epochs']}, "
+        if config['DEFAULT'].getboolean(['verbose']):
+            print(f"Participant Training - Epoch: {epoch+1}/{config['Federated'].getint(['local_epochs'])}, "
                 f"Loss: {total_loss/len(data_loader)}")
 
     return local_model.state_dict()
@@ -206,7 +207,7 @@ def pretrain_global_model(model, data_handler, device, config):
     Returns:
         The pretrained model.
     """
-    print(f"Pre-training Global Model for {config['pretrain_epochs']} epochs")
+    print(f"Pre-training Global Model for {config['Pretraining'].getint(['epochs'])} epochs")
 
     # Set the model to training mode
     model.train()
@@ -219,13 +220,13 @@ def pretrain_global_model(model, data_handler, device, config):
 
     # Define the loss criterion and optimizer
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=config['pretrain_lr'])
+    optimizer = optim.Adam(model.parameters(), lr=config['Pretraining'].getfloat(['lr']))
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', verbose=True)
 
     # Get the DataLoader for the full training dataset
-    train_loader = data_handler.get_global_train_dataloader(batch_size=config['pretrain_batch_size'],
+    train_loader = data_handler.get_global_train_dataloader(batch_size=config['Pretraining'].getint(['batch_size']),
                                                             shuffle=True)
-    test_loader = data_handler.get_test_dataloader(batch_size=config['pretrain_batch_size'],
+    test_loader = data_handler.get_test_dataloader(batch_size=config['Pretraining'].getint(['batch_size']),
                                                    shuffle=True)
 
     # Track best model
@@ -235,7 +236,7 @@ def pretrain_global_model(model, data_handler, device, config):
     best_model_saved = False
 
     # Training loop
-    for epoch in range(config['pretrain_epochs']):
+    for epoch in range(config['Pretraining'].getint(['epochs'])):
         total_loss = 0
 
         for inputs, labels in train_loader:
@@ -268,13 +269,13 @@ def pretrain_global_model(model, data_handler, device, config):
         history["global_model_loss"].append(total_loss/len(train_loader))
 
         # Print statistics
-        print(f"Pretrain Epoch: {epoch+1}/{config['pretrain_epochs']}, \
+        print(f"Pretrain Epoch: {epoch+1}/{config['Pretraining'].getint(['epochs'])}, \
               Loss: {total_loss/len(train_loader)}, \
               Test Acc: {accuracy}")
 
         # Save global model and history
-        if (epoch+1) % config['pretrain_save_interval'] == 0 or \
-            (epoch + 1) == config['pretrain_epochs']:
+        if (epoch+1) % config['Pretraining'].getint(['save_interval']) == 0 or \
+            (epoch + 1) == config['Pretraining'].getint(['epochs']):
             if not best_model_saved:
                 save_path = "./global_model_pretrain_best.pt"
                 torch.save(best_model, save_path)
@@ -299,7 +300,7 @@ def train(config_path): #pylint: disable=too-many-locals
     data_handler = DataHandler(config_path)
 
     # Create test DataLoder for global evaluation
-    test_loader = data_handler.get_test_dataloader(batch_size=config['batch_size'])
+    test_loader = data_handler.get_test_dataloader(batch_size=config['Federated'].getint(['batch_size']))
 
     # Create history to track global model performance.
     history = {"global_model_acc":[]}
@@ -316,23 +317,23 @@ def train(config_path): #pylint: disable=too-many-locals
     global_model = resnet18().to(device)
 
     # Pretrain Global Model
-    if config["pretrain"]:
+    if config['Federated'].getboolean(["pretrain"]):
         global_model = pretrain_global_model(global_model, data_handler, device, config)
 
     global_state_dict = global_model.state_dict()
 
     # Number of parallel local trainings
-    parallel_streams = config['parallel_streams']
+    parallel_streams = config['Federated'].getint(['parallel_streams'])
     # Check if we need to load from checkpoint
-    if config["load_from_checkpoint"]:
-        print(f"Resuming Training with {config['load_from_checkpoint']}")
-        global_model.load_state_dict(torch.load(config["load_from_checkpoint"],
+    if config['Federated']["load_from_checkpoint"]:
+        print(f"Resuming Training with {config['Federated']['load_from_checkpoint']}")
+        global_model.load_state_dict(torch.load(config['Federated']["load_from_checkpoint"],
                                                 map_location=device))
 
-    for federated_round in range(config['num_rounds']):
-        selected_participants = np.random.choice(range(config['num_participants']),
-                                                 size=config['num_selected'], replace=False)
-        print(f"Round {federated_round+1}/{config['num_rounds']}:\
+    for federated_round in range(config['Federated'].getint(['num_rounds'])):
+        selected_participants = np.random.choice(range(config['Federated'].getint(['num_participants'])),
+                                                 size=config['Federated'].getint(['num_selected']), replace=False)
+        print(f"Round {federated_round+1}/{config['Federated'].getint(['num_rounds'])}:\
                Selected Participants: {selected_participants}")
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=parallel_streams) as executor:
@@ -349,8 +350,8 @@ def train(config_path): #pylint: disable=too-many-locals
         # Aggregate local models' updates into the global model
         global_model = aggregate_models(global_model,
                                         local_state_dicts,
-                                        config['global_lr'],
-                                        config['num_selected'],
+                                        config['Federated'].getfloat(['global_lr']),
+                                        config['Federated'].getfloat(['num_selected']),
                                         device)
 
         # Evaluate the global model
@@ -359,8 +360,8 @@ def train(config_path): #pylint: disable=too-many-locals
         history["global_model_acc"].append(accuracy)
 
         # Save global model and history
-        if (federated_round+1) % config['save_interval'] == 0 or \
-            (federated_round + 1) == config['num_rounds']:
+        if (federated_round+1) % config['Federated'].getint(['save_interval']) == 0 or \
+            (federated_round + 1) == config['Federated'].getint(['num_rounds']):
             save_path = f"./global_model_round_{federated_round + 1}.pt"
             torch.save(global_model.state_dict(), save_path)
             print(f"Saved global model to {save_path}")
@@ -375,4 +376,4 @@ def train(config_path): #pylint: disable=too-many-locals
                          "global_model_acc.png")
 
 if __name__ == "__main__":
-    train('config.json')
+    train('config.ini')

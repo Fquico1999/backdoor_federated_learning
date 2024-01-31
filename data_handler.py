@@ -22,7 +22,7 @@ class DataHandler:
         self.alpha = self.config['Federated'].getfloat(['alpha'])
 
         # Download CIFAR-10 dataset
-        if self.config['Federated'].getboolean(['data_augmentation']):
+        if self.config['DEFAULT'].getboolean(['data_augmentation']):
             train_transform = transforms.Compose([RandomRotation(10),
                                                   RandomHorizontalFlip(),
                                                   RandomCrop(size=24),
