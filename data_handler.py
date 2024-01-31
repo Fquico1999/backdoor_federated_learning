@@ -8,7 +8,9 @@ import numpy as np
 from torchvision.datasets import CIFAR10
 from torchvision import transforms
 from torchvision.transforms import ToTensor, RandomCrop, RandomRotation, RandomHorizontalFlip
-from torch.utils.data import DataLoader, Subset
+from torch.utils.data import DataLoader, Subset, ConcatDataset
+
+from utils import AddGaussianNoise
 
 class DataHandler:
     """
@@ -20,6 +22,13 @@ class DataHandler:
         self.config = self.load_config(config_path)
         self.num_participants = self.config['Federated'].getint(['num_participants'])
         self.alpha = self.config['Federated'].getfloat(['alpha'])
+        # Extract poison information from config
+        self.poison_target_idx = self.config['Poison'].getint('target_idx')
+        self.poison_train_indices = self.config['Poison'].get('train_idxs', '')
+        self.poison_test_indices = self.config['Poison'].get('test_idxs', '')
+        # Split string into integers
+        self.poison_train_indices = [int(elem) for elem in self.poison_train_indices.split('\n')]
+        self.poison_test_indices = [int(elem) for elem in self.poison_test_indices.split('\n')]
 
         # Download CIFAR-10 dataset
         if self.config['DEFAULT'].getboolean(['data_augmentation']):
@@ -32,6 +41,9 @@ class DataHandler:
         self.dataset = CIFAR10(root='./data', train=True, download=True, transform=train_transform)
         # Load test dataset
         self.test_dataset = CIFAR10(root='./data', train=False, download=True, transform=ToTensor())
+        # Load poison dataset - has an extra transform
+        self.poison_dataset = CIFAR10(root="./data", train=True, transform=transforms.Compose([ToTensor(),
+                                                                                               AddGaussianNoise(std=0.05)]))
 
         # Check if partitions already exist
         partition_path = self.config['Federated'].get('partition_path', './partitions.json')
@@ -69,18 +81,20 @@ class DataHandler:
 
         # Partition dataset using Dirichlet distribution
         for class_idx in class_indices:
+            # Exclude poison indices from class indices
+            clean_class_idx = [idx for idx in class_idx if idx not in self.poison_train_indices+self.poison_test_indices]
             # Sample from Dirichlet distribution
             proportions = np.random.dirichlet(np.repeat(self.alpha, self.num_participants))
-            proportions = (proportions * len(class_idx)).astype(int)
+            proportions = (proportions * len(clean_class_idx)).astype(int)
 
             # Ensure sum of proportions equals the class count
-            proportions[-1] = len(class_idx) - proportions[:-1].sum()
+            proportions[-1] = len(clean_class_idx) - proportions[:-1].sum()
 
             # Allocate data to participants
-            np.random.shuffle(class_idx)
+            np.random.shuffle(clean_class_idx)
             allocated_idx = 0
             for i, p in enumerate(proportions):
-                partitions[i].extend(class_idx[allocated_idx:allocated_idx + p].tolist())
+                partitions[i].extend(clean_class_idx[allocated_idx:allocated_idx + p].tolist())
                 allocated_idx += p
 
         # Save partitions to a file
@@ -95,6 +109,16 @@ class DataHandler:
         subset = Subset(self.dataset, self.partitions[str(participant_id)])
         # Create and return DataLoader
         return DataLoader(subset, batch_size=batch_size, shuffle=True)
+
+    def get_poison_dataloader(self, participant_id, batch_size=32):
+        """
+        Make partition with poison images for selected adversarial participant
+        """
+        # Get dataset subset for the participant
+        subset_clean = Subset(self.dataset, self.partitions[str(participant_id)])
+        subset_poison = Subset(self.poison_dataset, self.poison_train_indices)
+        # Create and return DataLoader by concatenating clean and poison sets.
+        return DataLoader(ConcatDataset([subset_clean, subset_poison]), batch_size=batch_size, shuffle=True)
 
     def get_test_dataloader(self, batch_size=32, shuffle=True):
         """
