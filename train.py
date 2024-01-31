@@ -175,8 +175,6 @@ def pretrain_global_model(model, data_handler, device, config):
     # Setup figure and axis formatting
     fig, ax = plt.subplots()
     fig.set_size_inches(12,6)
-    ax.set_xlabel("Epochs")
-    ax.set_title("Global Model Pretrain History")
 
     # Define the loss criterion and optimizer
     criterion = nn.CrossEntropyLoss()
@@ -188,14 +186,15 @@ def pretrain_global_model(model, data_handler, device, config):
     test_loader = data_handler.get_test_dataloader(batch_size=config['pretrain_batch_size'],
                                                    shuffle=True)
 
+    # Track best model
+    best_accuracy = 0
+    best_model = None
+    # Avoid saving the model if best model hasn't changed
+    best_model_saved = False
+
     # Training loop
     for epoch in range(config['pretrain_epochs']):
         total_loss = 0
-        # Track best model
-        best_accuracy = 0
-        best_model = None
-        # Avoid saving the model if best model hasn't changed
-        best_model_saved = False
 
         for inputs, labels in train_loader:
             inputs, labels = inputs.to(device), labels.to(device)
@@ -241,6 +240,8 @@ def pretrain_global_model(model, data_handler, device, config):
             plt.cla()
             ax.plot(history['global_model_loss'], "C0", label="train_loss")
             ax.plot(history['global_model_acc'], "C1", label="test_acc")
+            ax.set_xlabel("Epochs")
+            ax.set_title("Global Model Pretrain History")
             plt.legend()
             fig.tight_layout()
             plt.savefig("global_model_pretrain_history.png", dpi=200)
