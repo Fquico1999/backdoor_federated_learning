@@ -13,9 +13,9 @@
     "data_augmentation": true,
     "verbose": false,
     "pretrain": true,
-    "pretrain_load_imagenet":true,
+    "pretrain_load_imagenet":false,
     "pretrain_lr":0.001,
     "pretrain_epochs":100,
     "pretrain_batch_size": 128,
-    "pretrain_save_interval": 10
+    "pretrain_save_interval": 1
 }
