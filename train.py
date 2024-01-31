@@ -179,6 +179,7 @@ def pretrain_global_model(model, data_handler, device, config):
     # Define the loss criterion and optimizer
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(model.parameters(), lr=config['pretrain_lr'])
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau('max')
 
     # Get the DataLoader for the full training dataset
     train_loader = data_handler.get_global_train_dataloader(batch_size=config['pretrain_batch_size'],
@@ -212,6 +213,9 @@ def pretrain_global_model(model, data_handler, device, config):
 
         # Evaluate the global model
         accuracy = evaluate_model(model, test_loader, device)
+
+        # Update the scheduler
+        scheduler.step(accuracy)
 
         # Update best model
         if accuracy > best_accuracy:
