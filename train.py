@@ -150,16 +150,17 @@ def plot_history(history, title, savepath=None):
     ax = plt.gca()
     plt.cla()
     ax_loss = plt.twinx(ax)
-    for metric in history:
+    for i, metric in enumerate(history):
         if '_acc' in metric:
-            ax.plot(history[metric], label=metric)
+            ax.plot(history[metric], f"C{i}", label=metric)
         else:
-            ax_loss.plot(history[metric], label=metric)
+            ax_loss.plot(history[metric],f"C{i}",label=metric)
     ax.set_xlabel("Epochs")
     ax.set_ylabel("Accuracy")
     ax.set_ylim([0,1])
     ax.set_title(title)
-    plt.legend()
+    ax.legend(loc = 'upper left')
+    ax_loss.legend(loc='upper right')
     fig.tight_layout()
     if savepath:
         plt.savefig(savepath, dpi=200)
