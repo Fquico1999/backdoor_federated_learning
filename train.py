@@ -142,6 +142,28 @@ def train_local_model(participant_id, global_state_dict, data_handler, device, c
 
     return local_model.state_dict()
 
+def plot_history(history, title, savepath=None):
+    """
+    Helper method to plot training history.
+    """
+    fig = plt.gcf()
+    ax = plt.gca()
+    plt.cla()
+    ax_loss = plt.twinx(ax)
+    for metric in history:
+        if '_acc' in metric:
+            ax.plot(history[metric], label=metric)
+        else:
+            ax_loss.plot(history[metric], label=metric)
+    ax.set_xlabel("Epochs")
+    ax.set_ylabel("Accuracy")
+    ax.set_ylim([0,1])
+    ax.set_title(title)
+    plt.legend()
+    fig.tight_layout()
+    if savepath:
+        plt.savefig(savepath, dpi=200)
+
 def pretrain_global_model(model, data_handler, device, config):
     """
     Pretrains the global model on the entire CIFAR10 training dataset.
@@ -178,8 +200,8 @@ def pretrain_global_model(model, data_handler, device, config):
 
     # Define the loss criterion and optimizer
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(model.parameters(), lr=config['pretrain_lr'])
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau('max')
+    optimizer = optim.Adam(model.parameters(), lr=config['pretrain_lr'])
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max')
 
     # Get the DataLoader for the full training dataset
     train_loader = data_handler.get_global_train_dataloader(batch_size=config['pretrain_batch_size'],
@@ -241,14 +263,7 @@ def pretrain_global_model(model, data_handler, device, config):
                 print(f"Saved global model to {save_path}")
 
             #Plot history and save
-            plt.cla()
-            ax.plot(history['global_model_loss'], "C0", label="train_loss")
-            ax.plot(history['global_model_acc'], "C1", label="test_acc")
-            ax.set_xlabel("Epochs")
-            ax.set_title("Global Model Pretrain History")
-            plt.legend()
-            fig.tight_layout()
-            plt.savefig("global_model_pretrain_history.png", dpi=200)
+            plot_history(history, "Global Model Pretrain History", "global_model_pretrain_history.png")
 
     return model
 
