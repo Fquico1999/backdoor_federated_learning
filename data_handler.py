@@ -7,7 +7,7 @@ import os
 import numpy as np
 from torchvision.datasets import CIFAR10
 from torchvision import transforms
-from torchvision.transforms import ToTensor, RandomCrop, RandomRotation, RandomHorizontalFlip
+from torchvision.transforms import ToTensor, RandomCrop, RandomRotation, RandomHorizontalFlip, Normalize
 from torch.utils.data import DataLoader, Subset, ConcatDataset
 
 from utils import AddGaussianNoise
@@ -35,15 +35,36 @@ class DataHandler:
             train_transform = transforms.Compose([RandomRotation(10),
                                                   RandomHorizontalFlip(),
                                                   RandomCrop(size=24),
-                                                  ToTensor()])
+                                                  ToTensor(),
+                                                  Normalize((0.4914, 0.4822, 0.4465),
+                                                            (0.2023, 0.1994, 0.2010))])
+            # Poison data needs additional transform
+            poison_transform = transforms.Compose([RandomRotation(10),
+                                                  RandomHorizontalFlip(),
+                                                  RandomCrop(size=24),
+                                                  ToTensor(),
+                                                  Normalize((0.4914, 0.4822, 0.4465),
+                                                            (0.2023, 0.1994, 0.2010)),
+                                                  AddGaussianNoise(std=0.05)])
         else:
-            train_transform = ToTensor()
+            train_transform = transforms.Compose([ToTensor(),
+                                                  Normalize((0.4914, 0.4822, 0.4465),
+                                                            (0.2023, 0.1994, 0.2010))])
+            poison_transform = transforms.Compose([ToTensor(),
+                                                   Normalize((0.4914, 0.4822, 0.4465),
+                                                             (0.2023, 0.1994, 0.2010)),
+                                                   AddGaussianNoise(std=0.05)])
+        # Test transform never has augmentation
+        test_transform = transforms.Compose([ToTensor(),
+                                             Normalize((0.4914, 0.4822, 0.4465),
+                                                                   (0.2023, 0.1994, 0.2010))])
+
+        # P
         self.dataset = CIFAR10(root='./data', train=True, download=True, transform=train_transform)
         # Load test dataset
-        self.test_dataset = CIFAR10(root='./data', train=False, download=True, transform=ToTensor())
+        self.test_dataset = CIFAR10(root='./data', train=False, download=True, transform=test_transform)
         # Load poison dataset - has an extra transform
-        self.poison_dataset = CIFAR10(root="./data", train=True, transform=transforms.Compose([ToTensor(),
-                                                                                               AddGaussianNoise(std=0.05)]))
+        self.poison_dataset = CIFAR10(root="./data", train=True, transform=poison_transform)
 
         # Check if partitions already exist
         partition_path = self.config['Federated'].get('partition_path', './partitions.json')
