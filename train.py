@@ -324,7 +324,7 @@ def train(config_path): #pylint: disable=too-many-locals
     global_model = resnet18().to(device)
 
     # Pretrain Global Model
-    if config['Federated'].getboolean("pretrain"):
+    if config['Pretraining'].getboolean("pretrain"):
         global_model = pretrain_global_model(global_model, data_handler, device, config)
 
     global_state_dict = global_model.state_dict()
