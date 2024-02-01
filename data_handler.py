@@ -20,8 +20,8 @@ class DataHandler:
     def __init__(self, config_path):
         # Load configurations
         self.config = self.load_config(config_path)
-        self.num_participants = self.config['Federated'].getint(['num_participants'])
-        self.alpha = self.config['Federated'].getfloat(['alpha'])
+        self.num_participants = self.config['Federated'].getint('num_participants')
+        self.alpha = self.config['Federated'].getfloat('alpha')
         # Extract poison information from config
         self.poison_target_idx = self.config['Poison'].getint('target_idx')
         self.poison_train_indices = self.config['Poison'].get('train_idxs', '')
@@ -31,7 +31,7 @@ class DataHandler:
         self.poison_test_indices = [int(elem) for elem in self.poison_test_indices.split('\n')]
 
         # Download CIFAR-10 dataset
-        if self.config['DEFAULT'].getboolean(['data_augmentation']):
+        if self.config['DEFAULT'].getboolean('data_augmentation'):
             train_transform = transforms.Compose([RandomRotation(10),
                                                   RandomHorizontalFlip(),
                                                   RandomCrop(size=24),
@@ -59,7 +59,6 @@ class DataHandler:
                                              Normalize((0.4914, 0.4822, 0.4465),
                                                                    (0.2023, 0.1994, 0.2010))])
 
-        # P
         self.dataset = CIFAR10(root='./data', train=True, download=True, transform=train_transform)
         # Load test dataset
         self.test_dataset = CIFAR10(root='./data', train=False, download=True, transform=test_transform)
