@@ -13,11 +13,8 @@ TODO:
 rotations and cropped of test backdoor images.
 - Track average global loss.
 """
-import os
 import configparser
-import json
 import concurrent.futures
-import urllib.request
 import numpy as np
 
 import matplotlib.pyplot as plt
@@ -125,7 +122,10 @@ def train_local_model(participant_id, global_state_dict, data_handler, device, c
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(local_model.parameters(), lr=config['Federated'].getfloat(['local_lr']))
 
-    data_loader = data_handler.get_dataloader(participant_id, batch_size=config['Federated'].getint(['batch_size']))
+    data_loader = data_handler.get_dataloader(
+        participant_id,
+        batch_size=config['Federated'].getint(['batch_size'])
+    )
 
     for epoch in range(config['Federated'].getint(['local_epochs'])):
         total_loss = 0
@@ -138,7 +138,8 @@ def train_local_model(participant_id, global_state_dict, data_handler, device, c
             optimizer.step()
             total_loss += loss.item()
         if config['DEFAULT'].getboolean(['verbose']):
-            print(f"Participant Training - Epoch: {epoch+1}/{config['Federated'].getint(['local_epochs'])}, "
+            print(f"Participant Training"
+                f" - Epoch: {epoch+1}/{config['Federated'].getint(['local_epochs'])}, "
                 f"Loss: {total_loss/len(data_loader)}")
 
     return local_model.state_dict()
@@ -193,7 +194,7 @@ def plot_federated_history(history, title, savepath=None):
     if savepath:
         plt.savefig(savepath, dpi=200)
 
-def pretrain_global_model(model, data_handler, device, config):
+def pretrain_global_model(model, data_handler, device, config): #pylint: disable=too-many-locals
     """
     Pretrains the global model on the entire CIFAR10 training dataset.
 
@@ -214,8 +215,8 @@ def pretrain_global_model(model, data_handler, device, config):
 
     # Create history to track global model performance.
     history = {"global_model_loss":[], "global_model_acc":[]}
-    # Setup figure and axis formatting
-    fig, ax = plt.subplots()
+    # Setup figure formatting
+    fig, _ = plt.subplots()
     fig.set_size_inches(12,6)
 
     # Define the loss criterion and optimizer
@@ -224,10 +225,14 @@ def pretrain_global_model(model, data_handler, device, config):
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', verbose=True)
 
     # Get the DataLoader for the full training dataset
-    train_loader = data_handler.get_global_train_dataloader(batch_size=config['Pretraining'].getint(['batch_size']),
-                                                            shuffle=True)
-    test_loader = data_handler.get_test_dataloader(batch_size=config['Pretraining'].getint(['batch_size']),
-                                                   shuffle=True)
+    train_loader = data_handler.get_global_train_dataloader(
+        batch_size=config['Pretraining'].getint(['batch_size']),
+        shuffle=True
+    )
+    test_loader = data_handler.get_test_dataloader(
+        batch_size=config['Pretraining'].getint(['batch_size']),
+        shuffle=True
+    )
 
     # Track best model
     best_accuracy = 0
@@ -300,7 +305,9 @@ def train(config_path): #pylint: disable=too-many-locals
     data_handler = DataHandler(config_path)
 
     # Create test DataLoder for global evaluation
-    test_loader = data_handler.get_test_dataloader(batch_size=config['Federated'].getint(['batch_size']))
+    test_loader = data_handler.get_test_dataloader(
+        batch_size=config['Federated'].getint(['batch_size'])
+    )
 
     # Create history to track global model performance.
     history = {"global_model_acc":[]}
@@ -331,8 +338,11 @@ def train(config_path): #pylint: disable=too-many-locals
                                                 map_location=device))
 
     for federated_round in range(config['Federated'].getint(['num_rounds'])):
-        selected_participants = np.random.choice(range(config['Federated'].getint(['num_participants'])),
-                                                 size=config['Federated'].getint(['num_selected']), replace=False)
+        selected_participants = np.random.choice(
+            range(config['Federated'].getint(['num_participants'])),
+            size=config['Federated'].getint(['num_selected']),
+            replace=False)
+
         print(f"Round {federated_round+1}/{config['Federated'].getint(['num_rounds'])}:\
                Selected Participants: {selected_participants}")
 
@@ -366,10 +376,6 @@ def train(config_path): #pylint: disable=too-many-locals
             torch.save(global_model.state_dict(), save_path)
             print(f"Saved global model to {save_path}")
 
-            #Plot history and save
-            ax.plot(history['global_model_acc'], "C0", label="global_model_acc")
-            fig.tight_layout()
-            plt.savefig("global_model_acc.png", dpi=200)
             #Plot history and save
             plot_federated_history(history,
                          "Global Model Test Accuracy",
