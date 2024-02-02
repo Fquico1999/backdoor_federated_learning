@@ -8,9 +8,9 @@ import numpy as np
 from torchvision.datasets import CIFAR10
 from torchvision import transforms
 from torchvision.transforms import ToTensor, RandomCrop, RandomRotation, RandomHorizontalFlip, Normalize
-from torch.utils.data import DataLoader, Subset, ConcatDataset
+from torch.utils.data import DataLoader, Subset
 
-from utils import AddGaussianNoise, PoisonedDataset
+from utils import AddGaussianNoise, PoisonedDataset, RepeatSampler
 
 class DataHandler:
     """
@@ -153,6 +153,25 @@ class DataHandler:
 
         # Create and return the DataLoader
         return DataLoader(mixed_dataset, batch_size=batch_size, shuffle=True)
+
+    def get_test_poison_dataloader(self, batch_size=1, num_samples=1000):
+        """
+        Returns a DataLoader for poison test images, ensuring each image is evaluated
+        multiple times with data augmentations.
+
+        Args:
+            batch_size (int): The batch size for the DataLoader.
+            num_samples (int): The number of times the test images should be sampled for evaluation.
+        """
+        # Create a Subset of the poison_dataset using poison_test_indices
+        subset_poison_test = Subset(self.poison_dataset, self.poison_test_indices)
+
+        # Initialize the DataLoader with the RepeatSampler
+        poison_test_loader = DataLoader(subset_poison_test,
+                                        batch_size=batch_size,
+                                        sampler=RepeatSampler(self.poison_test_indices,
+                                                              num_samples))
+        return poison_test_loader
 
     def get_test_dataloader(self, batch_size=32, shuffle=True):
         """

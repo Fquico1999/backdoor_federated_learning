@@ -6,9 +6,11 @@ which is required for the poisoned data.
 Classes:
     AddGaussianNoise: A callable class that adds Gaussian noise to a given tensor.
     PoisonedDataset: A custom dataset class to mix backdoor and clean data in proper amounts.
+    RepeatSampler: A sampler class to allow for sampling of test poison dataset N times.
 """
+
 import torch
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, Sampler
 
 class AddGaussianNoise():
     """
@@ -85,3 +87,27 @@ class PoisonedDataset(Dataset):
             int: Total number of samples in the mixed dataset.
         """
         return len(self.clean_indices) + len(self.poison_indices)
+
+class RepeatSampler(Sampler):
+    """
+    A custom sampler that repeats a given list of indices multiple times to achieve
+    repeated sampling of specific items in a dataset, useful for repeated evaluation
+    with data augmentations.
+
+    Args:
+        indices (list): A list of indices to sample from the dataset.
+        num_samples (int): The total number of times to sample.
+    """
+
+    def __init__(self, indices, num_samples):
+        self.indices = indices
+        self.num_samples = num_samples
+        self.num_repeats = num_samples // len(self.indices)
+
+    def __iter__(self):
+        for idx in self.indices:
+            for _ in range(self.num_repeats):
+                yield idx
+
+    def __len__(self):
+        return self.num_samples
