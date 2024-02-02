@@ -144,6 +144,45 @@ def train_local_model(participant_id, global_state_dict, data_handler, device, c
 
     return local_model.state_dict()
 
+def train_poison_model(attacker_id, global_state_dict, data_handler, device, config):
+    """
+    Trains a poison model targetting model replacement of the federated learning setup.
+
+
+    """
+    if config['DEFAULT'].getboolean('verbose'):
+        print(f"Attacjer ID: {attacker_id}")
+
+    poison_model = resnet18().to(device)
+    poison_model.load_state_dict(global_state_dict)
+
+    poison_model.train()
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.SGD(poison_model.parameters(), lr=config['Federated'].getfloat('local_lr'))
+
+    data_loader = data_handler.get_poison_dataloader(
+        attacker_id,
+        batch_size=config['Federated'].getint('batch_size')
+    )
+
+    for epoch in range(config['Federated'].getint('local_epochs')):
+        total_loss = 0
+        for inputs, labels in data_loader:
+            inputs, labels = inputs.to(device), labels.to(device)
+            optimizer.zero_grad()
+            outputs = poison_model(inputs)
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer.step()
+            total_loss += loss.item()
+        if config['DEFAULT'].getboolean('verbose'):
+            print(f"Poison Training"
+                f" - Epoch: {epoch+1}/{config['Federated'].getint('local_epochs')}, "
+                f"Loss: {total_loss/len(data_loader)}")
+
+    return poison_model.state_dict()
+
+
 def plot_history(history, title, savepath=None):
     """
     Helper method to plot training history.
@@ -329,6 +368,9 @@ def train(config_path): #pylint: disable=too-many-locals
 
     global_state_dict = global_model.state_dict()
 
+    # Which federated round to launch attack
+    poison_round = config['Poison'].getint('poison_round')
+
     # Number of parallel local trainings
     parallel_streams = config['Federated'].getint('parallel_streams')
     # Check if we need to load from checkpoint
@@ -338,15 +380,24 @@ def train(config_path): #pylint: disable=too-many-locals
                                                 map_location=device))
 
     for federated_round in range(config['Federated'].getint('num_rounds')):
+        attacker=None
         selected_participants = np.random.choice(
             range(config['Federated'].getint('num_participants')),
             size=config['Federated'].getint('num_selected'),
             replace=False)
 
+        if (federated_round+1) == poison_round:
+            attacker = np.random.choice(selected_participants,
+                                        size=None,
+                                        replace=False)
+
         print(f"Round {federated_round+1}/{config['Federated'].getint('num_rounds')}:\
                Selected Participants: {selected_participants}")
+        if attacker:
+            print("Selected Attacker: {attacker}")
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=parallel_streams) as executor:
+            # Submit all selected_participants, these don't include the attacker.
             futures = [executor.submit(train_local_model,
                                        participant_id,
                                        global_state_dict,
@@ -356,6 +407,12 @@ def train(config_path): #pylint: disable=too-many-locals
 
             local_state_dicts = [future.result() for future in\
                                   concurrent.futures.as_completed(futures)]
+
+        attacker_state_dict = train_poison_model(attacker,
+                                                 global_state_dict,
+                                                 data_handler,
+                                                 device,
+                                                 config)
 
         # Aggregate local models' updates into the global model
         global_model = aggregate_models(global_model,
