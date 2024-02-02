@@ -95,17 +95,17 @@ class RepeatSampler(Sampler):
     with data augmentations.
 
     Args:
-        indices (list): A list of indices to sample from the dataset.
+        dataset_size (int): Length of the dataset
         num_samples (int): The total number of times to sample.
     """
 
-    def __init__(self, indices, num_samples):
-        self.indices = indices
+    def __init__(self, dataset_size, num_samples):
+        self.dataset_size = dataset_size
         self.num_samples = num_samples
-        self.num_repeats = num_samples // len(self.indices)
+        self.num_repeats = num_samples // dataset_size
 
     def __iter__(self):
-        for idx in self.indices:
+        for idx in range(self.dataset_size):
             for _ in range(self.num_repeats):
                 yield idx
 

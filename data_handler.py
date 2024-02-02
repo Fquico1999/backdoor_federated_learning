@@ -169,7 +169,7 @@ class DataHandler:
         # Initialize the DataLoader with the RepeatSampler
         poison_test_loader = DataLoader(subset_poison_test,
                                         batch_size=batch_size,
-                                        sampler=RepeatSampler(self.poison_test_indices,
+                                        sampler=RepeatSampler(len(self.poison_test_indices),
                                                               num_samples))
         return poison_test_loader
 
