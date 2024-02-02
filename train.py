@@ -11,6 +11,7 @@ TODO:
 rotations and cropped of test backdoor images.
 - Track average global loss.
 - Remove backdoor images from global model pretraining.
+- Test test_dataloader ensure that the RepeatSampler works.
 """
 import configparser
 import concurrent.futures
@@ -191,7 +192,7 @@ def train_poison_model(attacker_id, global_state_dict, data_handler, device, con
                                           verbose = config['DEFAULT'].getboolean('verbose'))
 
     data_loader = data_handler.get_poison_dataloader(
-        attacker_id, 
+        attacker_id,
         config['Poison'].getint('target_idx'),
         batch_size=config['Poison'].getint('batch_size'),
         poison_per_batch=config['Poison'].getint('poison_per_batch')
@@ -445,16 +446,18 @@ def train(config_path): #pylint: disable=too-many-locals
             local_state_dicts = [future.result() for future in\
                                   concurrent.futures.as_completed(futures)]
 
-        # Train attacker after benign participants
-        attacker_state_dict = train_poison_model(attacker,
+        if attacker:
+            # Train attacker after benign participants
+            attacker_state_dict = train_poison_model(attacker,
                                                  global_state_dict,
                                                  data_handler,
                                                  device,
                                                  config)
+            local_state_dicts.append(attacker_state_dict)
 
         # Aggregate local models' updates into the global model
         global_model = aggregate_models(global_model,
-                                        local_state_dicts + [attacker_state_dict],
+                                        local_state_dicts,
                                         config['Federated'].getfloat('global_lr'),
                                         config['Federated'].getfloat('num_selected'),
                                         device)
