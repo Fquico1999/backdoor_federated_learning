@@ -30,4 +30,5 @@ train("/path/to/config")
 
 ## Notes
 
-- `partitions.json` corresponds to a breakdown of what non-iid CIFAR10 training indices correspond to the local datasets of each participant. Obviously, this depends on the number of participants, which is taken to be 100 as in the paper, but this can be modified in `config.ini`. If you do this, ensure that you alter the name of `partition_path` in the config file such that the partitions file is regenerated. 
+- `partitions.json` corresponds to a breakdown of what non-iid CIFAR10 training indices correspond to the local datasets of each participant. Obviously, this depends on the number of participants, which is taken to be 100 as in the paper, but this can be modified in `config.ini`. If you do this, ensure that you alter the name of `partition_path` in the config file such that the partitions file is regenerated.
+- The semantic backdoor used by default is any racing-striped car in CIFAR10. This is set in `config.ini` by providing the train/test indices corresponding to the poison images. If you want to change the semantic backdoor, ensure you also update these indices.
