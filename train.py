@@ -433,7 +433,7 @@ def train(config_path): #pylint: disable=too-many-locals
         print(f"Round {federated_round+1}/{config['Federated'].getint('num_rounds')}:\
                Selected Participants: {selected_participants}")
         if attacker:
-            print("Selected Attacker: {attacker}")
+            print(f"Selected Attacker: {attacker}")
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=parallel_streams) as executor:
             # Submit all selected_participants, these don't include the attacker.
@@ -476,6 +476,11 @@ def train(config_path): #pylint: disable=too-many-locals
         print(f"Global Model Backdoor Accuracy: {backdoor_accuracy:.2%}")
         history["global_backdoor_acc"].append(backdoor_accuracy)
 
+        # Save global model right after attack
+        if (federated_round+1) % config['Poison'].getint('poison_round') == 0:
+            save_path = f"./global_model_attacker_round_{federated_round + 1}.pt"
+            torch.save(global_model.state_dict(), save_path)
+            print(f"Saved global model to {save_path}")
         # Save global model and history
         if (federated_round+1) % config['Federated'].getint('save_interval') == 0 or \
             (federated_round + 1) == config['Federated'].getint('num_rounds'):
