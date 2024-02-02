@@ -148,10 +148,9 @@ def train_poison_model(attacker_id, global_state_dict, data_handler, device, con
     """
     Trains a poison model targetting model replacement of the federated learning setup.
 
-
     """
     if config['DEFAULT'].getboolean('verbose'):
-        print(f"Attacjer ID: {attacker_id}")
+        print(f"Attacker ID: {attacker_id}")
 
     poison_model = resnet18().to(device)
     poison_model.load_state_dict(global_state_dict)
@@ -159,6 +158,10 @@ def train_poison_model(attacker_id, global_state_dict, data_handler, device, con
     poison_model.train()
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(poison_model.parameters(), lr=config['Poison'].getfloat('local_lr'))
+    scheduler = optim.lr_scheduler.StepLR(optimizer,
+                                          config['Poison'].getint('lr_step_size'),
+                                          gamma=config['Poison'].getfloat('lr_gamma'),
+                                          verbose = config['DEFAULT'].getboolean('verbose'))
 
     data_loader = data_handler.get_poison_dataloader(
         attacker_id,
@@ -175,6 +178,7 @@ def train_poison_model(attacker_id, global_state_dict, data_handler, device, con
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
+            scheduler.step()
             total_loss += loss.item()
         if config['DEFAULT'].getboolean('verbose'):
             print(f"Poison Training"
