@@ -27,3 +27,7 @@ from train import train
 
 train("/path/to/config")
 ```
+
+## Notes
+
+- `partitions.json` corresponds to a breakdown of what non-iid CIFAR10 training indices correspond to the local datasets of each participant. Obviously, this depends on the number of participants, which is taken to be 100 as in the paper, but this can be modified in `config.ini`. If you do this, ensure that you alter the name of `partition_path` in the config file such that the partitions file is regenerated. 
