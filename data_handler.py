@@ -10,7 +10,7 @@ from torchvision import transforms
 from torchvision.transforms import ToTensor, RandomCrop, RandomRotation, RandomHorizontalFlip, Normalize
 from torch.utils.data import DataLoader, Subset, ConcatDataset
 
-from utils import AddGaussianNoise
+from utils import AddGaussianNoise, PoisonedDataset
 
 class DataHandler:
     """
@@ -130,15 +130,27 @@ class DataHandler:
         # Create and return DataLoader
         return DataLoader(subset, batch_size=batch_size, shuffle=True)
 
-    def get_poison_dataloader(self, participant_id, batch_size=32):
+    def get_poison_dataloader(self, participant_id, batch_size=32, poison_per_batch=20):
         """
-        Make partition with poison images for selected adversarial participant
+        Returns a DataLoader for a participant with a mix of clean and poison images in each batch.
+
+        Args:
+            participant_id (int): The participant's ID.
+            batch_size (int): The total number of samples in each batch.
+            poison_per_batch (int): The number of poison samples in each batch.
         """
-        # Get dataset subset for the participant
-        subset_clean = Subset(self.dataset, self.partitions[str(participant_id)])
-        subset_poison = Subset(self.poison_dataset, self.poison_train_indices)
-        # Create and return DataLoader by concatenating clean and poison sets.
-        return DataLoader(ConcatDataset([subset_clean, subset_poison]), batch_size=batch_size, shuffle=True)
+        # Get indices for clean and poison samples
+        clean_indices = self.partitions[str(participant_id)]
+
+        # Initialize the mixed dataset
+        mixed_dataset = PoisonedDataset(self.dataset,
+                                        self.poison_dataset,
+                                        clean_indices,
+                                        self.poison_train_indices,
+                                        poison_per_batch)
+
+        # Create and return the DataLoader
+        return DataLoader(mixed_dataset, batch_size=batch_size, shuffle=True)
 
     def get_test_dataloader(self, batch_size=32, shuffle=True):
         """
