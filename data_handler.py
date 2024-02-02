@@ -130,12 +130,13 @@ class DataHandler:
         # Create and return DataLoader
         return DataLoader(subset, batch_size=batch_size, shuffle=True)
 
-    def get_poison_dataloader(self, participant_id, batch_size=32, poison_per_batch=20):
+    def get_poison_dataloader(self, participant_id, attacker_target, batch_size=32, poison_per_batch=20):
         """
         Returns a DataLoader for a participant with a mix of clean and poison images in each batch.
 
         Args:
             participant_id (int): The participant's ID.
+            attacker_target (int): The class the attack is targeting.
             batch_size (int): The total number of samples in each batch.
             poison_per_batch (int): The number of poison samples in each batch.
         """
@@ -147,7 +148,8 @@ class DataHandler:
                                         self.poison_dataset,
                                         clean_indices,
                                         self.poison_train_indices,
-                                        poison_per_batch)
+                                        poison_per_batch,
+                                        attacker_target)
 
         # Create and return the DataLoader
         return DataLoader(mixed_dataset, batch_size=batch_size, shuffle=True)

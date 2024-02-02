@@ -33,7 +33,7 @@ class PoisonedDataset(Dataset):
     Class that combines a clean and poisoned dataset and allows for mixed batches,
     determined by mixing parameter poison_per_batch.
     """
-    def __init__(self, clean_dataset, poison_dataset, clean_indices, poison_indices, poison_per_batch):
+    def __init__(self, clean_dataset, poison_dataset, clean_indices, poison_indices, poison_per_batch, attacker_target):
         """
         Initializes the mixed dataset with specified clean and poison subsets and mixing parameters.
 
@@ -49,6 +49,7 @@ class PoisonedDataset(Dataset):
         self.clean_indices = clean_indices
         self.poison_indices = poison_indices
         self.poison_per_batch = poison_per_batch
+        self.attacker_target = attacker_target
         self.clean_per_batch = len(clean_indices) // (len(clean_indices) // poison_per_batch)
 
     def __getitem__(self, index):
@@ -59,14 +60,21 @@ class PoisonedDataset(Dataset):
         Args:
             index (int): The index of the item to fetch.
         """
-        if index % (self.clean_per_batch + self.poison_per_batch) < self.clean_per_batch:
-            # Fetch from clean dataset
-            clean_index = self.clean_indices[index % len(self.clean_indices)]
-            return self.clean_dataset[clean_index]
+        batch_num = index // (self.clean_per_batch + self.poison_per_batch)
+        index_in_batch = index % (self.clean_per_batch + self.poison_per_batch)
 
-        # Fetch from poison dataset
-        poison_index = self.poison_indices[index % len(self.poison_indices)]
-        return self.poison_dataset[poison_index]
+        if index_in_batch < self.clean_per_batch:
+            # Fetch from clean dataset
+            clean_index = (batch_num * self.clean_per_batch + index_in_batch) % len(self.clean_indices)
+            img, target = self.clean_dataset[self.clean_indices[clean_index]]
+        else:
+            # Fetch from poison dataset and change the target to attacker's target
+            poison_index = ((index_in_batch - self.clean_per_batch) +\
+                            batch_num * self.poison_per_batch) % len(self.poison_indices)
+            img, _ = self.poison_dataset[self.poison_indices[poison_index]]
+            target = self.attacker_target  # Change target to attacker's target
+
+        return img, target
 
     def __len__(self):
         """

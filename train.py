@@ -7,11 +7,10 @@ TODO:
 - Generate Attacker Dataloader, replace c=20 out of 64 in batch with backdoor dataset
 - Generate backdoor dataset from list of backdoor train images, and target label
 - Generate backdoor test images by rotate / crop of list of backdoor test images
-- Add config for which epoch to select on participant as malicious
-- Single shot implementation first. For that update, E=6, lr=0.05 and 1/10s every 2 epochs.
 - Implement backdoor accuracy- TP rate (i.e rate at which inputs are misclassified as target) for 1k
 rotations and cropped of test backdoor images.
 - Track average global loss.
+- Remove backdoor images from global model pretraining.
 """
 import configparser
 import concurrent.futures
@@ -164,7 +163,8 @@ def train_poison_model(attacker_id, global_state_dict, data_handler, device, con
                                           verbose = config['DEFAULT'].getboolean('verbose'))
 
     data_loader = data_handler.get_poison_dataloader(
-        attacker_id,
+        attacker_id, 
+        config['Poison'].getint('target_idx'),
         batch_size=config['Poison'].getint('batch_size'),
         poison_per_batch=config['Poison'].getint('poison_per_batch')
     )
@@ -392,6 +392,7 @@ def train(config_path): #pylint: disable=too-many-locals
             replace=False)
 
         if (federated_round+1) == poison_round:
+            # Sample the attacker index from participants, without replacement
             attacker = np.random.choice(selected_participants,
                                         size=None,
                                         replace=False)
@@ -413,6 +414,7 @@ def train(config_path): #pylint: disable=too-many-locals
             local_state_dicts = [future.result() for future in\
                                   concurrent.futures.as_completed(futures)]
 
+        # Train attacker after benign participants
         attacker_state_dict = train_poison_model(attacker,
                                                  global_state_dict,
                                                  data_handler,
@@ -421,7 +423,7 @@ def train(config_path): #pylint: disable=too-many-locals
 
         # Aggregate local models' updates into the global model
         global_model = aggregate_models(global_model,
-                                        local_state_dicts,
+                                        local_state_dicts + [attacker_state_dict],
                                         config['Federated'].getfloat('global_lr'),
                                         config['Federated'].getfloat('num_selected'),
                                         device)
