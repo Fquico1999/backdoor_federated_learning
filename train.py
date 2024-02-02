@@ -59,6 +59,34 @@ def evaluate_model(model, test_loader, device):
     accuracy = correct / total
     return accuracy
 
+def evaluate_backdoor(model, poison_test_loader, attacker_target, device):
+    """
+    Evaluates the backdoor performance.
+
+    Args:
+        model (torch.nn.Module): The model to evaluate.
+        poison_test_loader (DataLoader): DataLoader for the poison test dataset.
+
+    Returns:
+        float: The backdoor accuracy of the model on the poison test dataset.
+    """
+    model.eval()
+    correct = 0
+    total = 0
+    with torch.no_grad():
+        for inputs, labels in poison_test_loader:
+            inputs, labels = inputs.to(device), labels.to(device)
+            # These are the attackers target labels
+            target_labels = torch.ones_like(labels, device=device)*attacker_target
+            outputs = model(inputs)
+            _, predicted = torch.max(outputs.data, 1)
+            # Backdoor accuracy is the fraction of inputs that were misclassified as attacker_target
+            total += labels.size(0)
+            correct += (predicted == target_labels).sum().item()
+
+    accuracy = correct / total
+    return accuracy
+
 def aggregate_models(global_model, local_state_dicts, eta, n, device):
     """
     Aggregates updates from local models' state dictionaries to update the global model.
@@ -352,9 +380,12 @@ def train(config_path): #pylint: disable=too-many-locals
     test_loader = data_handler.get_test_dataloader(
         batch_size=config['Federated'].getint('batch_size')
     )
+    # Create backdoor test Dataloader
+    poison_test_loader = data_handler.get_test_poison_dataloader(batch_size=config['Poison'].getint('batch_size'),
+                                                                 num_samples=config['Poison'].getint('num_eval'))
 
     # Create history to track global model performance.
-    history = {"global_model_acc":[]}
+    history = {"global_acc":[], "global_backdoor_acc":[]}
     # Setup figure and axis formatting
     fig, ax = plt.subplots()
     fig.set_size_inches(12,6)
@@ -428,10 +459,18 @@ def train(config_path): #pylint: disable=too-many-locals
                                         config['Federated'].getfloat('num_selected'),
                                         device)
 
-        # Evaluate the global model
+        # Evaluate the global model on main task
         accuracy = evaluate_model(global_model, test_loader, device)
         print(f"Global Model Test Accuracy: {accuracy:.2%}")
-        history["global_model_acc"].append(accuracy)
+        history["global_acc"].append(accuracy)
+
+        # Evaluate the global model on backdoor task
+        backdoor_accuracy = evaluate_backdoor(global_model,
+                                              poison_test_loader,
+                                              config['Poison'].getint('target_idx'),
+                                              device)
+        print(f"Global Model Backdoor Accuracy: {backdoor_accuracy:.2%}")
+        history["global_backdoor_acc"].append(backdoor_accuracy)
 
         # Save global model and history
         if (federated_round+1) % config['Federated'].getint('save_interval') == 0 or \
