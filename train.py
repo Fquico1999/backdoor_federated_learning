@@ -158,14 +158,15 @@ def train_poison_model(attacker_id, global_state_dict, data_handler, device, con
 
     poison_model.train()
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(poison_model.parameters(), lr=config['Federated'].getfloat('local_lr'))
+    optimizer = optim.SGD(poison_model.parameters(), lr=config['Poison'].getfloat('local_lr'))
 
     data_loader = data_handler.get_poison_dataloader(
         attacker_id,
-        batch_size=config['Federated'].getint('batch_size')
+        batch_size=config['Poison'].getint('batch_size'),
+        poison_per_batch=config['Poison'].getint('poison_per_batch')
     )
 
-    for epoch in range(config['Federated'].getint('local_epochs')):
+    for epoch in range(config['Poison'].getint('local_epochs')):
         total_loss = 0
         for inputs, labels in data_loader:
             inputs, labels = inputs.to(device), labels.to(device)
@@ -177,7 +178,7 @@ def train_poison_model(attacker_id, global_state_dict, data_handler, device, con
             total_loss += loss.item()
         if config['DEFAULT'].getboolean('verbose'):
             print(f"Poison Training"
-                f" - Epoch: {epoch+1}/{config['Federated'].getint('local_epochs')}, "
+                f" - Epoch: {epoch+1}/{config['Poison'].getint('local_epochs')}, "
                 f"Loss: {total_loss/len(data_loader)}")
 
     return poison_model.state_dict()
