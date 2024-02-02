@@ -7,6 +7,7 @@ TODO:
 - Track average global loss.
 - Remove backdoor images from global model pretraining.
 - Test test_dataloader ensure that the RepeatSampler works.
+- Model replacement for attacker model: Gt + n/eta*(X-Gt)
 """
 import configparser
 import concurrent.futures
@@ -209,6 +210,11 @@ def train_poison_model(attacker_id, global_state_dict, data_handler, device, con
                 f" - Epoch: {epoch+1}/{config['Poison'].getint('local_epochs')}, "
                 f"Loss: {total_loss/len(data_loader)}")
 
+    # Update state dict for model replacement
+    clip = config['Federated'].getint('num_participants') / config['Federated'].getfloat('global_lr')
+    for key, value in poison_model.state_dict().items():
+        global_value = global_state_dict[key]
+        poison_model.state_dict()[key].copy_(global_value + clip*(value-global_value))
     return poison_model.state_dict()
 
 
