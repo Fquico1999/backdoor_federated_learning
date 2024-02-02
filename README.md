@@ -13,7 +13,7 @@ Attacking the federated learning setup works best when the global model has trai
 model replacement to work assumes this to be true. For that to occur, the global model must be trained for some time. Rather than waiting for 10,000 epochs
 of federated learning training, which is too lengthy, I've added the ability to first pretrain the global model directly on the CIFAR10 dataset for a 
 set number of epochs. Note that this still requires the federated learning to run for some warmup rounds afterwards. The parameters for this are found under
-the `[Pretraining]` section of the config file.
+the `[Pretraining]` section of the config file. Also, to use a pretrained model, ensure you set `load_from_checkpoint` to point to the model path in `config.ini`.
 
 The other notable change is beign able to train the local benign models concurrently. This is set with `parallel_streams` in the config file.
 
