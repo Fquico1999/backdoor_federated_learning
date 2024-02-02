@@ -181,7 +181,8 @@ class DataHandler:
 
     def get_global_train_dataloader(self, batch_size=32, shuffle=True):
         """
-        Returns a DataLoader for the entire CIFAR-10 training dataset.
+        Returns a DataLoader for the entire CIFAR-10 training dataset, excluding the backdoor
+        training and test images.
 
         Args:
             batch_size (int): The batch size for the DataLoader.
@@ -190,4 +191,13 @@ class DataHandler:
         Returns:
             DataLoader: A DataLoader for the CIFAR-10 training dataset.
         """
-        return DataLoader(self.dataset, batch_size=batch_size, shuffle=shuffle)
+
+        all_indices = set(range(len(self.dataset)))
+        exclude_indices = set(self.poison_train_indices) | set(self.poison_test_indices)
+
+        # Get the valid indices by excluding poison_indices and poison_test_indices
+        valid_indices = list(all_indices - exclude_indices)
+
+        # Create a Subset of the dataset using valid_indices
+        valid_subset = Subset(self.dataset, valid_indices)
+        return DataLoader(valid_subset, batch_size=batch_size, shuffle=shuffle)
