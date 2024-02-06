@@ -14,6 +14,8 @@ import concurrent.futures
 import numpy as np
 
 import matplotlib.pyplot as plt
+from sklearn.metrics import confusion_matrix
+import seaborn as sns  # For a nicer confusion matrix visualization
 
 import torch
 from torch import nn
@@ -83,6 +85,52 @@ def evaluate_backdoor(model, poison_test_loader, attacker_target, device):
 
     accuracy = correct / total
     return accuracy
+
+def plot_confusion_matrix(model, dataloader, device, class_names, savefig=None):
+    """
+    Plots the confusion matrix for the predictions made by the global model on a given dataset.
+
+    Args:
+        model (torch.nn.Module): The trained global model.
+        dataloader (torch.utils.data.DataLoader): DataLoader for the dataset to evaluate.
+        device (torch.device): The device on which the model and data are located.
+        class_names (list of str): List of class names corresponding to dataset labels.
+        savefig (str): Filename to save plot.
+    """
+    # Ensure the model is in evaluation mode
+    model.eval()
+
+    # Storage for true labels and predictions
+    all_labels = []
+    all_preds = []
+
+    with torch.no_grad():
+        for inputs, labels in dataloader:
+            inputs, labels = inputs.to(device), labels.to(device)
+
+            # Forward pass to get outputs
+            outputs = model(inputs)
+
+            # Convert outputs to predicted class indices
+            _, preds = torch.max(outputs, 1)
+
+            # Append batch predictions and labels
+            all_labels.extend(labels.cpu().numpy())
+            all_preds.extend(preds.cpu().numpy())
+
+    # Compute the confusion matrix
+    cm = confusion_matrix(all_labels, all_preds)
+
+    # Plot the confusion matrix
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=class_names, yticklabels=class_names)
+    plt.title('Confusion Matrix')
+    plt.xlabel('Predicted Labels')
+    plt.ylabel('True Labels')
+    if savefig:
+        plt.savefig(savefig)
+    plt.show()
+
 
 def aggregate_models(global_model, local_state_dicts, eta, n, device):
     """
@@ -465,8 +513,16 @@ def train(config_path): #pylint: disable=too-many-locals
 
         # Evaluate the global model on main task
         accuracy = evaluate_model(global_model, test_loader, device)
+
         print(f"Global Model Test Accuracy: {accuracy:.2%}")
         history["global_acc"].append(accuracy)
+
+        # Plot confusion matrix for test set
+        plot_confusion_matrix(global_model,
+                              test_loader,
+                              device,
+                              data_handler.dataset.classes,
+                              f"global_test_cm_{federated_round+1}.png")
 
         # Evaluate the global model on backdoor task
         backdoor_accuracy = evaluate_backdoor(global_model,
@@ -475,6 +531,13 @@ def train(config_path): #pylint: disable=too-many-locals
                                               device)
         print(f"Global Model Backdoor Accuracy: {backdoor_accuracy:.2%}")
         history["global_backdoor_acc"].append(backdoor_accuracy)
+
+        # Plot confusion matrix for backdoor set
+        plot_confusion_matrix(global_model,
+                                poison_test_loader,
+                                device,
+                                data_handler.dataset.classes,
+                                f"global_backdoor_cm_{federated_round+1}.png")
 
         # Save global model right after attack
         if (federated_round+1) % config['Poison'].getint('poison_round') == 0:
