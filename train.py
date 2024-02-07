@@ -144,7 +144,7 @@ def aggregate_models(global_model, local_state_dicts, eta, n, device):
         device (torch.device): The device on which to perform the aggregation.
     """
     global_state_dict = global_model.state_dict()
-    update_magnitudes = []
+    update_magnitudes = {}
 
     # Accumulate updates from each local model's state dictionary
     for name in global_state_dict.keys():
@@ -156,7 +156,11 @@ def aggregate_models(global_model, local_state_dicts, eta, n, device):
                             for local_state_dict in local_state_dicts]
 
         for update in local_updates:
-            update_magnitudes.append(torch.norm(update).item())
+            if 'num_batches_tracked' not in name:
+                if name in update_magnitudes:
+                    update_magnitudes[name].append(torch.norm(update).item())
+                else:
+                    update_magnitudes[name] = [torch.norm(update).item()]
 
         global_state_dict[name] = global_param + eta / n * sum(local_updates)
 
@@ -511,12 +515,8 @@ def train(config_path): #pylint: disable=too-many-locals
                                         config['Federated'].getfloat('global_lr'),
                                         config['Federated'].getfloat('num_selected'),
                                         device)
-        # Plot update magnitudes
-        plt.hist(update_magnitudes, bins=50)
-        plt.title('Distribution of Update Magnitudes')
-        plt.xlabel('Magnitude')
-        plt.ylabel('Frequency')
-        plt.show()
+        # Save model updates to file
+        np.save(f'model_updates_{federated_round}.npy', update_magnitudes)
 
         # Evaluate the global model on main task
         accuracy = evaluate_model(global_model, test_loader, device)
