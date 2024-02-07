@@ -142,26 +142,27 @@ def aggregate_models(global_model, local_state_dicts, eta, n, device):
         eta (float): The global learning rate used for aggregation.
         n (int): The number of participants selected in the current round.
         device (torch.device): The device on which to perform the aggregation.
-
-    Returns:
-        torch.nn.Module: The updated global model after aggregation.
     """
     global_state_dict = global_model.state_dict()
+    update_magnitudes = []
 
     # Accumulate updates from each local model's state dictionary
     for name in global_state_dict.keys():
         global_param = global_state_dict[name]
         # Ensure each parameter update is moved to the correct device before accumulation
-        local_sum = sum((local_state_dict[name].to(device)\
+        local_updates = [(local_state_dict[name].to(device)\
                          if torch.is_tensor(local_state_dict[name])\
                          else torch.tensor(local_state_dict[name], device=device)) - global_param\
-                            for local_state_dict in local_state_dicts)
+                            for local_state_dict in local_state_dicts]
 
-        global_state_dict[name] = global_param + eta / n * local_sum
+        for update in local_updates:
+            update_magnitudes.append(torch.norm(update).item())
+
+        global_state_dict[name] = global_param + eta / n * sum(local_updates)
 
     # Apply the aggregated updates to the global model
     global_model.load_state_dict(global_state_dict)
-    return global_model
+    return global_model, update_magnitudes
 
 
 def train_local_model(participant_id, global_state_dict, data_handler, device, config):
@@ -505,11 +506,17 @@ def train(config_path): #pylint: disable=too-many-locals
             local_state_dicts.append(attacker_state_dict)
 
         # Aggregate local models' updates into the global model
-        global_model = aggregate_models(global_model,
+        global_model, update_magnitudes = aggregate_models(global_model,
                                         local_state_dicts,
                                         config['Federated'].getfloat('global_lr'),
                                         config['Federated'].getfloat('num_selected'),
                                         device)
+        # Plot update magnitudes
+        plt.hist(update_magnitudes, bins=50)
+        plt.title('Distribution of Update Magnitudes')
+        plt.xlabel('Magnitude')
+        plt.ylabel('Frequency')
+        plt.show()
 
         # Evaluate the global model on main task
         accuracy = evaluate_model(global_model, test_loader, device)
