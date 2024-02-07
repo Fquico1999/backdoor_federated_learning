@@ -34,30 +34,30 @@ class DataHandler:
         if self.config['DEFAULT'].getboolean('data_augmentation'):
             train_transform = transforms.Compose([RandomRotation(10),
                                                   RandomHorizontalFlip(),
-                                                  RandomCrop(size=24),
+                                                  RandomCrop(size=32, padding=4),
                                                   ToTensor(),
-                                                  Normalize((0.4914, 0.4822, 0.4465),
-                                                            (0.2023, 0.1994, 0.2010))])
+                                                  Normalize((0.5, 0.5, 0.5),
+                                                            (0.5, 0.5, 0.5))])
             # Poison data needs additional transform
             poison_transform = transforms.Compose([RandomRotation(10),
                                                   RandomHorizontalFlip(),
-                                                  RandomCrop(size=24),
+                                                  RandomCrop(size=32, padding=4),
                                                   ToTensor(),
-                                                  Normalize((0.4914, 0.4822, 0.4465),
-                                                            (0.2023, 0.1994, 0.2010)),
+                                                  Normalize((0.5, 0.5, 0.5),
+                                                            (0.5, 0.5, 0.5)),
                                                   AddGaussianNoise(std=0.05)])
         else:
             train_transform = transforms.Compose([ToTensor(),
-                                                  Normalize((0.4914, 0.4822, 0.4465),
-                                                            (0.2023, 0.1994, 0.2010))])
+                                                  Normalize((0.5, 0.5, 0.5),
+                                                            (0.5, 0.5, 0.5))])
             poison_transform = transforms.Compose([ToTensor(),
-                                                   Normalize((0.4914, 0.4822, 0.4465),
-                                                             (0.2023, 0.1994, 0.2010)),
+                                                   Normalize((0.5, 0.5, 0.5),
+                                                             (0.5, 0.5, 0.5)),
                                                    AddGaussianNoise(std=0.05)])
         # Test transform never has augmentation
         test_transform = transforms.Compose([ToTensor(),
-                                             Normalize((0.4914, 0.4822, 0.4465),
-                                                                   (0.2023, 0.1994, 0.2010))])
+                                             Normalize((0.5, 0.5, 0.5),
+                                                        (0.5, 0.5, 0.5))])
 
         self.dataset = CIFAR10(root='./data', train=True, download=True, transform=train_transform)
         # Load test dataset
