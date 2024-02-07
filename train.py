@@ -256,8 +256,9 @@ def train_poison_model(attacker_id, global_state_dict, data_handler, device, con
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
-            scheduler.step()
             total_loss += loss.item()
+        # Only step scheduler every epoch
+        scheduler.step()
         if config['DEFAULT'].getboolean('verbose'):
             print(f"Poison Training"
                 f" - Epoch: {epoch+1}/{config['Poison'].getint('local_epochs')}, "
