@@ -479,9 +479,9 @@ def train(config_path): #pylint: disable=too-many-locals
 
         if (federated_round+1) == poison_round:
             # Sample the attacker index from participants, without replacement
-            attacker = np.random.choice(selected_participants,
-                                        size=None,
-                                        replace=False)
+            attacker_idx = np.random.randint(0, len(selected_participants))
+            attacker = selected_participants[attacker_idx]
+            selected_participants = np.delete(selected_participants, attacker_idx)
 
         print(f"Round {federated_round+1}/{config['Federated'].getint('num_rounds')}:\
                Selected Participants: {selected_participants}")
