@@ -38,7 +38,7 @@ class BasicBlock(nn.Module): #pylint: disable=too-few-public-methods
                                stride=stride,
                                padding=1,
                                bias=False)
-        self.bn1 = nn.BatchNorm2d(planes)
+        #self.bn1 = nn.BatchNorm2d(planes)
         # ReLU used after each BatchNorm
         self.relu = nn.ReLU(inplace=True)
         self.conv2 = nn.Conv2d(planes,
@@ -47,7 +47,7 @@ class BasicBlock(nn.Module): #pylint: disable=too-few-public-methods
                                padding=1,
                                stride=1,
                                bias=False)
-        self.bn2 = nn.BatchNorm2d(planes)
+        #self.bn2 = nn.BatchNorm2d(planes)
 
         #Optional downsampling to match dimensions
         self.downsample=downsample
@@ -66,8 +66,8 @@ class BasicBlock(nn.Module): #pylint: disable=too-few-public-methods
 
         identity = x if self.downsample is None else self.downsample(x)
 
-        out = self.relu(self.bn1(self.conv1(x)))
-        out = self.bn2(self.conv2(out))
+        out = self.relu(self.conv1(x))
+        out = self.conv2(out)
 
         #Adding residual (identity) conection
         out += identity
@@ -94,7 +94,7 @@ class ResNet(nn.Module): #pylint: disable=too-few-public-methods, too-many-insta
         self.inplanes = 32
 
         self.conv1 = nn.Conv2d(3, self.inplanes, kernel_size=3, stride=1, padding=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(self.inplanes)
+        # self.bn1 = nn.BatchNorm2d(self.inplanes)
         self.relu = nn.ReLU(inplace = True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=1)
 
@@ -135,7 +135,7 @@ class ResNet(nn.Module): #pylint: disable=too-few-public-methods, too-many-insta
             downsample = nn.Sequential(
                 nn.Conv2d(self.inplanes, planes * block.expansion,
                           kernel_size=1, stride=stride, bias=False),
-                nn.BatchNorm2d(planes * block.expansion),
+                # nn.BatchNorm2d(planes * block.expansion),
         )
 
         layers = [block(self.inplanes, planes, stride, downsample)]
@@ -155,7 +155,7 @@ class ResNet(nn.Module): #pylint: disable=too-few-public-methods, too-many-insta
         Returns:
             Tensor: Output tensor of the model.
         """
-        x = self.relu(self.bn1(self.conv1(x)))
+        x = self.relu(self.conv1(x))
         x = self.maxpool(x)
 
         x = self.layer1(x)
