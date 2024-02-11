@@ -102,7 +102,7 @@ class DataHandler:
         # Partition dataset using Dirichlet distribution
         for class_idx in class_indices:
             # Exclude poison indices from class indices
-            clean_class_idx = [idx for idx in class_idx if idx not in self.poison_train_indices+self.poison_test_indices]
+            clean_class_idx = np.array([idx for idx in class_idx if idx not in self.poison_train_indices+self.poison_test_indices])
             # Sample from Dirichlet distribution
             proportions = np.random.dirichlet(np.repeat(self.alpha, self.num_participants))
             proportions = (proportions * len(clean_class_idx)).astype(int)
