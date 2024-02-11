@@ -221,7 +221,7 @@ def train_local_model(participant_id, global_state_dict, data_handler, device, c
 
     return local_model.state_dict()
 
-def train_poison_model(attacker_id, global_state_dict, data_handler, device, config):
+def train_poison_model(attacker_id, global_state_dict, data_handler, device, config, test_loader, poison_test_loader):
     """
     Trains a poison model targetting model replacement of the federated learning setup.
 
@@ -264,6 +264,17 @@ def train_poison_model(attacker_id, global_state_dict, data_handler, device, con
                 f" - Epoch: {epoch+1}/{config['Poison'].getint('local_epochs')}, "
                 f"Loss: {total_loss/len(data_loader)}")
 
+    # Evaluate the global model on main task
+    accuracy = evaluate_model(poison_model, test_loader, device)
+
+    print(f"Poison Model Test Accuracy: {accuracy:.2%}")
+
+    backdoor_accuracy = evaluate_backdoor(poison_model,
+                                        poison_test_loader,
+                                        config['Poison'].getint('target_idx'),
+                                        device)
+    print(f"Poison Model Backdoor Accuracy: {backdoor_accuracy:.2%}")
+    
     # Update state dict for model replacement
     clip = config['Federated'].getint('num_participants') / config['Federated'].getfloat('global_lr')
     for key, value in poison_model.state_dict().items():
@@ -507,7 +518,9 @@ def train(config_path): #pylint: disable=too-many-locals
                                                  global_state_dict,
                                                  data_handler,
                                                  device,
-                                                 config)
+                                                 config,
+                                                 test_loader,
+                                                 poison_test_loader)
             local_state_dicts.append(attacker_state_dict)
 
         # Aggregate local models' updates into the global model
@@ -517,7 +530,7 @@ def train(config_path): #pylint: disable=too-many-locals
                                         config['Federated'].getfloat('num_selected'),
                                         device)
         # Save model updates to file
-        np.save(f'model_updates_{federated_round}.npy', update_magnitudes)
+        #np.save(f'model_updates_{federated_round}.npy', update_magnitudes)
 
         # Evaluate the global model on main task
         accuracy = evaluate_model(global_model, test_loader, device)
@@ -526,11 +539,11 @@ def train(config_path): #pylint: disable=too-many-locals
         history["global_acc"].append(accuracy)
 
         # Plot confusion matrix for test set
-        plot_confusion_matrix(global_model,
-                              test_loader,
-                              device,
-                              data_handler.dataset.classes,
-                              f"global_test_cm_{federated_round+1}.png")
+        # plot_confusion_matrix(global_model,
+        #                       test_loader,
+        #                       device,
+        #                       data_handler.dataset.classes,
+        #                       f"global_test_cm_{federated_round+1}.png")
 
         # Evaluate the global model on backdoor task
         backdoor_accuracy = evaluate_backdoor(global_model,
@@ -541,11 +554,11 @@ def train(config_path): #pylint: disable=too-many-locals
         history["global_backdoor_acc"].append(backdoor_accuracy)
 
         # Plot confusion matrix for backdoor set
-        plot_confusion_matrix(global_model,
-                                poison_test_loader,
-                                device,
-                                data_handler.dataset.classes,
-                                f"global_backdoor_cm_{federated_round+1}.png")
+        # plot_confusion_matrix(global_model,
+        #                         poison_test_loader,
+        #                         device,
+        #                         data_handler.dataset.classes,
+        #                         f"global_backdoor_cm_{federated_round+1}.png")
 
         # Save global model right after attack
         if (federated_round+1) % config['Poison'].getint('poison_round') == 0:
