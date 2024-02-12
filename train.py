@@ -42,16 +42,23 @@ def evaluate_model(model, test_loader, device):
     model.eval()
     correct = 0
     total = 0
+    total_loss = 0.0
+    criterion = nn.CrossEntropyLoss()
     with torch.no_grad():
         for inputs, labels in test_loader:
             inputs, labels = inputs.to(device), labels.to(device)
             outputs = model(inputs)
+
+            loss = criterion(outputs, labels)
+            total_loss += loss.item()
+
             _, predicted = torch.max(outputs.data, 1)
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
 
     accuracy = correct / total
-    return accuracy
+    average_loss = total_loss / len(test_loader)
+    return accuracy, average_loss
 
 def evaluate_backdoor(model, poison_test_loader, attacker_target, device):
     """
@@ -275,9 +282,9 @@ def train_poison_model(attacker_id, global_state_dict, data_handler, device, con
                 f"Loss: {total_loss/len(data_loader)}")
 
     # Evaluate the global model on main task
-    accuracy = evaluate_model(poison_model, test_loader, device)
+    accuracy, avg_loss = evaluate_model(poison_model, test_loader, device)
 
-    print(f"Poison Model Test Accuracy: {accuracy:.2%}")
+    print(f"Poison Model Test Accuracy: {accuracy:<5.2%} | Loss: {avg_loss:<5.2}")
 
     backdoor_accuracy = evaluate_backdoor(poison_model,
                                         poison_test_loader,
@@ -408,7 +415,7 @@ def pretrain_global_model(model, data_handler, device, config): #pylint: disable
             total_loss += loss.item()
 
         # Evaluate the global model
-        accuracy = evaluate_model(model, test_loader, device)
+        accuracy,_ = evaluate_model(model, test_loader, device)
 
         # Update the scheduler
         scheduler.step(accuracy)
@@ -463,7 +470,7 @@ def train(config_path): #pylint: disable=too-many-locals
                                                                  num_samples=config['Poison'].getint('num_eval'))
 
     # Create history to track global model performance.
-    history = {"global_acc":[], "global_backdoor_acc":[], "local_updates_sum":[]}
+    history = {"global_acc":[], "global_backdoor_acc":[], "global_loss":[], "local_updates_sum":[]}
     # Setup figure and axis formatting
     fig, ax = plt.subplots()
     fig.set_size_inches(12,6)
@@ -547,10 +554,11 @@ def train(config_path): #pylint: disable=too-many-locals
                                         device)
 
         # Evaluate the global model on main task
-        accuracy = evaluate_model(global_model, test_loader, device)
+        accuracy, avg_loss = evaluate_model(global_model, test_loader, device)
 
-        print(f"Global Model Test Accuracy: {accuracy:.2%}")
+        print(f"Global Model Test Accuracy: {accuracy:<5.2%} | Loss: {avg_loss:<5.2}")
         history["global_acc"].append(accuracy)
+        history["global_loss"].append(avg_loss)
 
         # Plot confusion matrix for test set
         # plot_confusion_matrix(global_model,
