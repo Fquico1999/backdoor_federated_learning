@@ -283,14 +283,12 @@ def train_poison_model(attacker_id, global_state_dict, data_handler, device, con
 
     # Evaluate the global model on main task
     accuracy, avg_loss = evaluate_model(poison_model, test_loader, device)
-
-    print(f"Poison Model Test Accuracy: {accuracy:<5.2%} | Loss: {avg_loss:<5.2}")
-
     backdoor_accuracy = evaluate_backdoor(poison_model,
                                         poison_test_loader,
                                         config['Poison'].getint('target_idx'),
                                         device)
-    print(f"Poison Model Backdoor Accuracy: {backdoor_accuracy:.2%}")
+    print(f"Poison Model: Test Accuracy: {accuracy:<5.2%} | Backdoor Accuracy: {backdoor_accuracy:<5.2%} | Loss: {avg_loss:<8.8}")
+
     torch.save(poison_model.state_dict(), "poison_model_state_dict.pt")
     # Update state dict for model replacement
     clip = config['Federated'].getint('num_participants') / config['Federated'].getfloat('global_lr')
@@ -555,10 +553,16 @@ def train(config_path): #pylint: disable=too-many-locals
 
         # Evaluate the global model on main task
         accuracy, avg_loss = evaluate_model(global_model, test_loader, device)
+        # Evaluate the global model on backdoor task
+        backdoor_accuracy = evaluate_backdoor(global_model,
+                                              poison_test_loader,
+                                              config['Poison'].getint('target_idx'),
+                                              device)
 
-        print(f"Global Model Test Accuracy: {accuracy:<5.2%} | Loss: {avg_loss:<5.2}")
+        print(f"Global Model: Test Accuracy: {accuracy:<5.2%} | Backdoor Accuracy: {backdoor_accuracy:<5.2%} | Loss: {avg_loss:<8.8}")
         history["global_acc"].append(accuracy)
         history["global_loss"].append(avg_loss)
+        history["global_backdoor_acc"].append(backdoor_accuracy)
 
         # Plot confusion matrix for test set
         # plot_confusion_matrix(global_model,
@@ -566,14 +570,6 @@ def train(config_path): #pylint: disable=too-many-locals
         #                       device,
         #                       data_handler.dataset.classes,
         #                       f"global_test_cm_{federated_round+1}.png")
-
-        # Evaluate the global model on backdoor task
-        backdoor_accuracy = evaluate_backdoor(global_model,
-                                              poison_test_loader,
-                                              config['Poison'].getint('target_idx'),
-                                              device)
-        print(f"Global Model Backdoor Accuracy: {backdoor_accuracy:.2%}")
-        history["global_backdoor_acc"].append(backdoor_accuracy)
 
         # Plot confusion matrix for backdoor set
         # plot_confusion_matrix(global_model,
