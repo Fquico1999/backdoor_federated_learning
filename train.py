@@ -3,11 +3,6 @@ Main Federated Learning Setup.
 There are a set number of rounds, where m participants are chosen
 at random to train for E epochs on their local datsets. After training, local models are
 sent to update the global model by averaging.
-TODO:
-- Track average global loss.
-- Remove backdoor images from global model pretraining.
-- Test test_dataloader ensure that the RepeatSampler works.
-- Model replacement for attacker model: Gt + n/eta*(X-Gt)
 """
 import configparser
 import concurrent.futures
@@ -131,6 +126,29 @@ def plot_confusion_matrix(model, dataloader, device, class_names, savefig=None):
         plt.savefig(savefig)
     plt.show()
 
+def local_model_update_sum(global_model, local_state_dicts, device):
+    """
+    Aggregate local updates. Used to confirm if the assumption that local model updates,
+    when aggregated, tend to zero holds.
+
+    Args:
+        global_model (torch.nn.Module): The current global model.
+        local_state_dicts (list of dict):   The state dictionaries from local models.
+                                            Excludes attacker model
+        device (torch.device): Device where data and model is held.
+    """
+    global_state_dict = global_model.state_dict()
+    local_updates_dict = {}
+
+    for name in global_state_dict.keys():
+        if "bn" not in name and "downsample" not in name:
+            global_param = global_state_dict[name]
+            local_updates = [local_state_dict[name].to(device) - global_param\
+                             for local_state_dict in local_state_dicts]
+            local_updates_dict[name] = sum(local_updates)
+    local_updates_avg = [torch.mean(val).item() for val in local_updates_dict.values()]
+    return np.mean(local_updates_avg), local_updates_dict
+
 
 def aggregate_models(global_model, local_state_dicts, eta, n, device):
     """
@@ -144,7 +162,6 @@ def aggregate_models(global_model, local_state_dicts, eta, n, device):
         device (torch.device): The device on which to perform the aggregation.
     """
     global_state_dict = global_model.state_dict()
-    update_magnitudes = {}
 
     # Accumulate updates from each local model's state dictionary
     for name in global_state_dict.keys():
@@ -155,18 +172,11 @@ def aggregate_models(global_model, local_state_dicts, eta, n, device):
                          else torch.tensor(local_state_dict[name], device=device)) - global_param\
                             for local_state_dict in local_state_dicts]
 
-        for update in local_updates:
-            if 'num_batches_tracked' not in name:
-                if name in update_magnitudes:
-                    update_magnitudes[name].append(torch.norm(update).item())
-                else:
-                    update_magnitudes[name] = [torch.norm(update).item()]
-
-        global_state_dict[name] = global_param + eta / n * sum(local_updates)
+        global_state_dict[name] = global_param + sum(local_updates)*(float(eta)/float(n))
 
     # Apply the aggregated updates to the global model
     global_model.load_state_dict(global_state_dict)
-    return global_model, update_magnitudes
+    return global_model
 
 
 def train_local_model(participant_id, global_state_dict, data_handler, device, config):
@@ -274,7 +284,7 @@ def train_poison_model(attacker_id, global_state_dict, data_handler, device, con
                                         config['Poison'].getint('target_idx'),
                                         device)
     print(f"Poison Model Backdoor Accuracy: {backdoor_accuracy:.2%}")
-    
+    torch.save(poison_model.state_dict(), "poison_model_state_dict.pt")
     # Update state dict for model replacement
     clip = config['Federated'].getint('num_participants') / config['Federated'].getfloat('global_lr')
     for key, value in poison_model.state_dict().items():
@@ -431,6 +441,7 @@ def pretrain_global_model(model, data_handler, device, config): #pylint: disable
                          "Global Model Pretrain History",
                          "global_model_pretrain_history.png")
 
+    plt.show()
     return model
 
 def train(config_path): #pylint: disable=too-many-locals
@@ -452,7 +463,7 @@ def train(config_path): #pylint: disable=too-many-locals
                                                                  num_samples=config['Poison'].getint('num_eval'))
 
     # Create history to track global model performance.
-    history = {"global_acc":[], "global_backdoor_acc":[]}
+    history = {"global_acc":[], "global_backdoor_acc":[], "local_updates_sum":[]}
     # Setup figure and axis formatting
     fig, ax = plt.subplots()
     fig.set_size_inches(12,6)
@@ -511,6 +522,10 @@ def train(config_path): #pylint: disable=too-many-locals
 
             local_state_dicts = [future.result() for future in\
                                   concurrent.futures.as_completed(futures)]
+        
+        # Compute local updates sum withotu attacker dict.
+        local_updates_sum, _ = local_model_update_sum(global_model, local_state_dicts, device)
+        history["local_updates_sum"].append(local_updates_sum)
 
         if attacker:
             # Train attacker after benign participants
@@ -521,16 +536,15 @@ def train(config_path): #pylint: disable=too-many-locals
                                                  config,
                                                  test_loader,
                                                  poison_test_loader)
+
             local_state_dicts.append(attacker_state_dict)
 
         # Aggregate local models' updates into the global model
-        global_model, update_magnitudes = aggregate_models(global_model,
+        global_model = aggregate_models(global_model,
                                         local_state_dicts,
                                         config['Federated'].getfloat('global_lr'),
                                         config['Federated'].getfloat('num_selected'),
                                         device)
-        # Save model updates to file
-        #np.save(f'model_updates_{federated_round}.npy', update_magnitudes)
 
         # Evaluate the global model on main task
         accuracy = evaluate_model(global_model, test_loader, device)
